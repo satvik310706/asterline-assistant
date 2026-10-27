@@ -1,2 +1,3 @@
-def main() -> None:
-    print("Hello from asterline-assistant!")
+from .cli import main
+
+__all__ = ["main"]

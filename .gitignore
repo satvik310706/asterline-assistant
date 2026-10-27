@@ -4,5 +4,7 @@ __pycache__/
 *.sqlite3
 *.db
 chroma_db/
+data/chroma/
+data/*.sqlite3
 .cache/
 eval/results/cache/

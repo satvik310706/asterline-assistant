@@ -8,14 +8,26 @@ authors = [
 ]
 requires-python = ">=3.11"
 dependencies = [
+    "chromadb>=1.5.9",
+    "fastembed>=0.9.1",
     "google-genai>=2.33.0",
+    "langgraph>=1.2.18",
     "langsmith>=0.14.13",
+    "pydantic>=2.14.1",
     "python-dotenv>=1.2.4",
+    "rank-bm25>=0.2.2",
+    "streamlit>=1.66.1",
 ]
 
 [project.scripts]
 asterline-assistant = "asterline_assistant:main"
+asterline = "asterline_assistant.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.12.17,<0.13.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
