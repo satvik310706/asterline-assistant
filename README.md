@@ -12,14 +12,17 @@ uv run asterline ingest
 uv run asterline run
 ```
 
-The first index build downloads `BAAI/bge-small-en-v1.5` once through FastEmbed (approximately 70 MB) into `.cache/fastembed/`; it is cached locally and ignored by Git. No generation model is downloaded. Ollama uses the already-installed `llama3.2:3b` when selected.
+The first index build downloads `BAAI/bge-small-en-v1.5` once through FastEmbed (approximately 70 MB) into `.cache/fastembed/`; it is cached locally and ignored by Git. No generation model is downloaded by setup. Ollama uses the already-installed `llama3.2:3b` when selected or as Gemini fallback.
 
 Copy `.env.example` to `.env` and set Gemini/LangSmith variables locally. The app loads them with python-dotenv without printing values. Missing credentials select FakeLLM demo mode; LangSmith tracing and uploads skip when unavailable. Gemini and Ollama usage may have provider account or local hardware costs; FakeLLM is offline and free.
+
+On Windows, Ollama normally runs as a local service/application. Confirm it is available with `ollama list`; the expected fallback model is `llama3.2:3b`. Gemini quota or service errors automatically try Ollama. If the local server is unavailable too, the CLI returns a clean source-only response and prints sanitized diagnostics instead of a traceback. `uv run asterline ask "..." --provider ollama` is a direct local-provider smoke test.
 
 ## Commands
 
 ```text
 uv run asterline ask "What is the current Launch ingestion rate?" --provider fake --config baseline --user alice
+uv run asterline ask "What is the current Launch ingestion rate?" --provider ollama --config baseline --user alice
 uv run asterline eval --provider fake --config baseline --no-fallback
 uv run asterline eval-memory --provider fake
 uv run asterline export-traces

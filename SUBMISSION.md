@@ -43,6 +43,12 @@ unverified context and never counts as company evidence. Secrets and sensitive
 personal data are redacted or rejected before storage and tracing. SQLite is the
 source of truth; hard delete removes memory rows, vectors, sessions, and messages.
 
+## Provider resilience smoke
+A real Gemini request returned HTTP 429 (quota exhausted); the app recorded the
+sanitized primary error and successfully served the answer through the locally
+installed Ollama llama3.2:3b model with a citation validated against retrieved evidence.
+This is a resilience smoke test, not a Gemini answer-quality evaluation.
+
 ## Limitations
 FakeLLM reports verify plumbing, not provider quality. Gemini quality runs and
 remote LangSmith links require the author's credentials and quota. Deleted data

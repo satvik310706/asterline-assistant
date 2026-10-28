@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import re
 import hashlib
-from typing import Any, TypedDict
+import time
+from typing import Any, Callable, TypedDict
 
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, Field
@@ -162,7 +163,7 @@ def _build_graph():
     return graph.compile()
 
 
-def run_improved_research(question: str, user_id: str, retriever: HybridRetriever, provider: LLMProvider, memory: MemoryStore, history: list[HistoryMessage] | None = None) -> ResearchResponse:
+def run_improved_research(question: str, user_id: str, retriever: HybridRetriever, provider: LLMProvider, memory: MemoryStore, history: list[HistoryMessage] | None = None, on_step: Callable[[str, float], None] | None = None) -> ResearchResponse:
     set_trace_context({
         "intent": "question",
         "config": "improved",
@@ -174,7 +175,16 @@ def run_improved_research(question: str, user_id: str, retriever: HybridRetrieve
         "session_id": "interactive",
     })
     try:
-        result = _build_graph().invoke({"question": question, "user_id": user_id, "history": history or [], "retriever": retriever, "provider": provider, "memory": memory})
-        return result["response"]
+        initial: GraphState = {"question": question, "user_id": user_id, "history": history or [], "retriever": retriever, "provider": provider, "memory": memory}
+        state: dict[str, Any] = dict(initial)
+        last_event = time.perf_counter()
+        for update in _build_graph().stream(initial, stream_mode="updates"):
+            now = time.perf_counter()
+            for node_name, node_update in update.items():
+                state.update(node_update)
+                if on_step is not None:
+                    on_step(node_name, now - last_event)
+                last_event = now
+        return state["response"]
     finally:
         clear_trace_context()

@@ -44,7 +44,9 @@ Status is updated after each deliverable with what works, verification commands,
 
 - [x] 5.1 dataset byte preservation: `.gitattributes` added; active workspace raw hashes and line counts match the assignment.
 - [x] 5.2 provider diagnostics: status, quota class, Retry-After, model, and sanitized primary/fallback errors are carried through CLI/eval/trace metadata; Google retry-delay text is decoded without exposing secrets.
-- [ ] 5.3 real Gemini baseline/improved/memory runs and one measured improvement.
+- [ ] 5.3 full real Gemini baseline/improved/memory runs and a measured quality improvement.
+  - [x] Real Gemini quota failure exercised end-to-end; verified fallback to local Ollama succeeds with a grounded answer and validated citation.
+  - [ ] Full evaluations remain unverified because Gemini returns HTTP 429 `RESOURCE_EXHAUSTED`; do not interpret FakeLLM metrics as provider quality.
 - [x] 5.4 LangSmith upload compatibility, redacted live export, synthetic export labels, and demo-trace runner implemented.
   - Not verified: successful remote upload/live trace capture; external credentials and Gemini quota were unavailable for a clean end-to-end run.
 - [x] 5.5 live Streamlit health check attempted; environment rejected both PTY and hidden background process creation (`Access is denied`). Existing AppTest startup coverage remains verified.
@@ -63,3 +65,10 @@ Status is updated after each deliverable with what works, verification commands,
 - [x] Added `uv run asterline build-submission`, which reads `eval/final/*.json` and generates `SUBMISSION.md` and `SUBMISSION.pdf`.
 - [x] Added a generation test; repository/trace URLs remain explicit author-fill placeholders.
 - [x] Fresh-clone hardening rerun passed after the synthetic-fixture scanner correction.
+
+## Reliability and UI follow-up
+
+- [x] Verified local Ollama model `llama3.2:3b` is present and direct CLI answers work without downloading a generation model.
+- [x] Verified Gemini HTTP 429 → Ollama fallback returns a cited answer; improved parser normalizes bare `SOURCE id | title` headers and validates IDs against evidence.
+- [x] UI now streams actual LangGraph node-completion events and elapsed timings; baseline UI labels its simpler path honestly.
+- [x] Current full test suite: 52 passed.

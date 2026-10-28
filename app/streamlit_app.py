@@ -137,9 +137,10 @@ def main() -> None:
         try:
             with st.status("Running agents", expanded=True) as activity:
                 agents = ["router", "memory_reader", "retriever", "evidence_analyst", "answer_writer", "verifier", "memory_writer"] if config == "improved" else ["router", "retriever", "answer_writer"]
-                timeline = {agent: st.empty() for agent in agents}
-                for agent, slot in timeline.items():
-                    slot.write(f"○ {agent} · pending")
+                timeline = {agent: st.empty() for agent in agents} if config == "improved" else {}
+                for index, agent in enumerate(agents):
+                    if agent in timeline:
+                        timeline[agent].write(f"{'◉' if index == 0 else '○'} {agent} · {'running' if index == 0 else 'pending'}")
                 started = time.perf_counter()
                 validate_corpus_integrity(settings.corpus_path)
                 retriever = HybridRetriever(load_corpus(settings.corpus_path), settings.chroma_path, settings.fastembed_cache_path)
@@ -148,10 +149,18 @@ def main() -> None:
                 history = [*messages, {"role": "user", "content": question}]
                 history_models = [type("History", (), item) for item in history]
                 fn = run_improved_research if config == "improved" else run_research
-                response = fn(question, st.session_state.user, retriever, provider, store, history=history_models)
+                if config == "improved":
+                    def on_agent_step(agent: str, elapsed: float) -> None:
+                        agent_index = agents.index(agent)
+                        timeline[agent].write(f"● {agent} · done · {elapsed:.2f}s")
+                        if agent_index + 1 < len(agents):
+                            next_agent = agents[agent_index + 1]
+                            timeline[next_agent].write(f"◉ {next_agent} · running")
+                    response = fn(question, st.session_state.user, retriever, provider, store, history=history_models, on_step=on_agent_step)
+                else:
+                    st.write("Baseline path · hybrid retrieval → citation-checked answer")
+                    response = fn(question, st.session_state.user, retriever, provider, store, history=history_models)
                 elapsed = time.perf_counter() - started
-                for agent, slot in timeline.items():
-                    slot.write(f"● {agent} · done")
                 st.caption(f"agent graph completed in {elapsed:.2f}s")
                 activity.update(label="Agents complete", state="complete", expanded=False)
         except Exception as error:

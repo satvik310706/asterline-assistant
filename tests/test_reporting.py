@@ -14,7 +14,9 @@ def test_reporting_publishes_and_renders_generated_metrics(tmp_path: Path) -> No
     assert publish_results(results, final)
     output = tmp_path / "EVAL.md"
     render_eval(final, output)
-    assert "1.0000" in output.read_text(encoding="utf-8")
+    rendered = output.read_text(encoding="utf-8")
+    assert "1.0000" in rendered
+    assert "not estimates of Gemini or Ollama answer quality" in rendered
 
 
 def test_langsmith_upload_uses_current_client_api(tmp_path: Path, monkeypatch) -> None:

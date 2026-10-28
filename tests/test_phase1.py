@@ -323,12 +323,21 @@ def test_ollama_prompt_has_no_literal_placeholder() -> None:
     chunk = load_corpus(ROOT / "data/corpus.jsonl")[0]
     provider.answer("q", EvidencePack(query="q", chunks=[{"chunk": chunk}]))
     assert prompts and "[chunk_id" not in prompts[0]
+    assert "never combine a refusal with a factual answer" in prompts[0]
 
 
 def test_parser_normalizes_ollama_source_pipe_citation() -> None:
     chunk = load_corpus(ROOT / "data/corpus.jsonl")[0]
     evidence = EvidencePack(query="q", chunks=[{"chunk": chunk}])
     draft = parse_text_answer(f"The answer is supported. [SOURCE {chunk.chunk_id} | {chunk.title}]", evidence, attempt=1, degraded=True)
+    assert f"[{chunk.chunk_id} — {chunk.title}]" in draft.answer
+    assert draft.cited_chunk_ids == [chunk.chunk_id]
+
+
+def test_parser_normalizes_bare_ollama_source_header_captured_from_real_run() -> None:
+    chunk = load_corpus(ROOT / "data/corpus.jsonl")[0]
+    raw_reply = f"The fact is documented.  SOURCE {chunk.chunk_id} | {chunk.title}"
+    draft = parse_text_answer(raw_reply, EvidencePack(query="q", chunks=[{"chunk": chunk}]), attempt=1, degraded=True)
     assert f"[{chunk.chunk_id} — {chunk.title}]" in draft.answer
     assert draft.cited_chunk_ids == [chunk.chunk_id]
 

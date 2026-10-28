@@ -118,12 +118,15 @@ def format_failure(provider: str, model: str, failure: ProviderFailure, role: st
 
 
 def _extract_citations(text: str) -> tuple[str, list[tuple[str, str]]]:
-    """Accept the canonical citation and Ollama's header-shaped variant."""
+    """Normalize common header-style citations, then validate IDs in code."""
     pairs = re.findall(r"\[([^\s—|\]]+)\s+—\s+([^\]]+)\]", text)
     pipe_pattern = re.compile(r"\[(?:SOURCE\s+)?([^\s|—\]]+)\s*\|\s*([^\]]+)\]", re.IGNORECASE)
     pipe_pairs = pipe_pattern.findall(text)
     normalized = pipe_pattern.sub(lambda match: f"[{match.group(1)} — {match.group(2).strip()}]", text)
-    return normalized, pairs + pipe_pairs
+    bare_source_pattern = re.compile(r"(?im)(?<!\S)SOURCE\s+([^\s|]+)\s*\|\s*([^\r\n]+?)\s*$")
+    bare_source_pairs = bare_source_pattern.findall(normalized)
+    normalized = bare_source_pattern.sub(lambda match: f"[{match.group(1)} — {match.group(2).strip()}]", normalized)
+    return normalized, pairs + pipe_pairs + bare_source_pairs
 
 
 def parse_text_answer(text: str, evidence: EvidencePack, *, attempt: int, degraded: bool) -> AnswerDraft:
@@ -261,9 +264,9 @@ class OllamaLLM(LLMProvider):
         for attempt in (1, 2):
             self.calls += 1
             try:
-                prompt = f"Answer briefly using only the evidence. Copy source ids and titles exactly from the evidence headers. {example}\nQuestion: {question}\nEvidence:\n{context}"
+                prompt = f"Answer the question directly using only the evidence. If evidence supports the answer, state it plainly. Do not say the answer is missing and then give it; never combine a refusal with a factual answer. If evidence truly does not support it, clearly abstain. Copy source ids and titles exactly from the evidence headers. {example}\nQuestion: {question}\nEvidence:\n{context}"
                 if attempt == 2:
-                    prompt = f"Answer in one or two sentences. Copy one exact citation from the evidence headers. {example} Q: {question}\n{context}"
+                    prompt = f"Give one direct evidence-grounded answer in at most two sentences. No contradictory refusal. Abstain only if the evidence cannot answer. Copy one exact citation from the evidence headers. {example} Q: {question}\n{context}"
                 text = self.request_fn(prompt)
                 return self._parse_text(text, evidence, attempt)
             except ProviderFailure as error:

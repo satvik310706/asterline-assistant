@@ -28,3 +28,13 @@ def test_improved_graph_returns_cited_answer(tmp_path: Path) -> None:
     response = run_improved_research("What is the Launch rate?", "alice", OneChunkRetriever(), FakeLLM(), MemoryStore(tmp_path / "memory.sqlite3"))
     assert "demo:0" in response.answer
     assert response.provider == "fake"
+
+
+def test_improved_graph_emits_completed_node_timings(tmp_path: Path) -> None:
+    events: list[tuple[str, float]] = []
+    run_improved_research(
+        "What is the Launch rate?", "alice", OneChunkRetriever(), FakeLLM(),
+        MemoryStore(tmp_path / "memory.sqlite3"), on_step=lambda node, elapsed: events.append((node, elapsed)),
+    )
+    assert [node for node, _ in events] == ["router", "memory_reader", "retriever", "evidence_analyst", "answer_writer", "verifier", "memory_writer"]
+    assert all(elapsed >= 0 for _, elapsed in events)

@@ -9,7 +9,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 4 0 R >>
 endobj
 4 0 obj
-<< /Length 2731 >>
+<< /Length 2745 >>
 stream
 BT
 /F1 9 Tf
@@ -104,7 +104,7 @@ BT
 0 -15 Td
 () Tj
 0 -15 Td
-(## Limitations) Tj
+(## Provider resilience smoke) Tj
 0 -15 Td
 ET
 endstream
@@ -113,11 +113,23 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 6 0 R >>
 endobj
 6 0 obj
-<< /Length 1690 >>
+<< /Length 2113 >>
 stream
 BT
 /F1 9 Tf
 45 760 Td
+(A real Gemini request returned HTTP 429 \(quota exhausted\); the app recorded the) Tj
+0 -15 Td
+(sanitized primary error and successfully served the answer through the locally) Tj
+0 -15 Td
+(installed Ollama llama3.2:3b model with a citation validated against retrieved evidence.) Tj
+0 -15 Td
+(This is a resilience smoke test, not a Gemini answer-quality evaluation.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(## Limitations) Tj
+0 -15 Td
 (FakeLLM reports verify plumbing, not provider quality. Gemini quality runs and) Tj
 0 -15 Td
 (remote LangSmith links require the author's credentials and quota. Deleted data) Tj
@@ -201,11 +213,11 @@ xref
 0000000058 00000 n 
 0000000121 00000 n 
 0000000247 00000 n 
-0000003030 00000 n 
-0000003156 00000 n 
-0000004898 00000 n 
+0000003044 00000 n 
+0000003170 00000 n 
+0000005335 00000 n 
 trailer
 << /Size 8 /Root 1 0 R >>
 startxref
-4968
+5405
 %%EOF
