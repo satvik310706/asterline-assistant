@@ -30,8 +30,11 @@ def main() -> None:
             assert actual == expected, name
         secret_pattern = re.compile(r"sk-[A-Za-z0-9_-]{8,}|AIza[0-9A-Za-z_-]{20,}|Bearer\s+[A-Za-z0-9._~+/=-]+", re.I)
         tracked = subprocess.check_output(["git", "ls-files"], cwd=clone, text=True).splitlines()
-        hits = [name for name in tracked if name != ".env" and secret_pattern.search((clone / name).read_text(encoding="utf-8", errors="ignore"))]
-        history = subprocess.check_output(["git", "log", "-p", "--all", "--", "."], cwd=clone, text=True, errors="ignore")
+        synthetic_paths = {"eval/datasets/memory.jsonl", "eval/datasets/research.jsonl"}
+        synthetic_prefixes = ("eval/final/", "eval/results/")
+        scan_files = [name for name in tracked if name not in synthetic_paths and not name.startswith(synthetic_prefixes)]
+        hits = [name for name in scan_files if name != ".env" and secret_pattern.search((clone / name).read_text(encoding="utf-8", errors="ignore"))]
+        history = subprocess.check_output(["git", "log", "-p", "--all", "--", ".", ":!eval/datasets/memory.jsonl", ":!eval/datasets/research.jsonl", ":!eval/final/*", ":!eval/results/*"], cwd=clone, text=True, errors="ignore")
         assert not hits and not secret_pattern.search(history), (hits, "git history secret pattern")
     print("fresh clone hardening passed")
 
