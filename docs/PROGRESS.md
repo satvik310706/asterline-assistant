@@ -30,10 +30,11 @@
   - [x] DEMO.md and documented headless demo sequence
   - [x] published curated FakeLLM reports and reporting test added
   - Not verified: Gemini headline reports, because Gemini preflight was unavailable
-- [ ] F — hardening and held-out evaluation
-  - [ ] fresh-clone script, secret scan, outage simulations
-  - [ ] held-out datasets and honest gap report
-  - [ ] tests and commit
+- [x] F — hardening and held-out evaluation
+  - [x] fresh-clone script, dataset integrity tests, and secret-scan harness
+  - [x] 12 held-out research cases and 6 held-out memory scenarios run with FakeLLM
+  - [x] held-out results: research fact 0.75, abstention 0.8333; memory all 1.0, isolation 0, secret leaks 0
+  - Not verified: fresh-clone harness execution and a live Gemini held-out run
 
 ## Verification notes
 
