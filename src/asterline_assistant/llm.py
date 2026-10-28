@@ -112,11 +112,20 @@ def format_failure(provider: str, model: str, failure: ProviderFailure, role: st
     return f"{role}: {provider}/{model} failed: {failure.error_class}{status}{quota}{retry} {_sanitize(failure.detail)}{raw}"
 
 
+def _extract_citations(text: str) -> tuple[str, list[tuple[str, str]]]:
+    """Accept the canonical citation and Ollama's header-shaped variant."""
+    pairs = re.findall(r"\[([^\s—|\]]+)\s+—\s+([^\]]+)\]", text)
+    pipe_pattern = re.compile(r"\[(?:SOURCE\s+)?([^\s|—\]]+)\s*\|\s*([^\]]+)\]", re.IGNORECASE)
+    pipe_pairs = pipe_pattern.findall(text)
+    normalized = pipe_pattern.sub(lambda match: f"[{match.group(1)} — {match.group(2).strip()}]", text)
+    return normalized, pairs + pipe_pairs
+
+
 def parse_text_answer(text: str, evidence: EvidencePack, *, attempt: int, degraded: bool) -> AnswerDraft:
     cleaned = re.sub(r"^\s*```(?:json|text)?\s*|\s*```\s*$", "", text or "", flags=re.IGNORECASE | re.DOTALL).strip()
     if not cleaned:
         raise ProviderFailure("model returned an empty reply", error_class="EmptyResponse", transient=False, attempts=attempt, raw_reply=(text or "")[:300])
-    citations = re.findall(r"\[([^\s—]+)\s+—\s+([^\]]+)\]", cleaned)
+    cleaned, citations = _extract_citations(cleaned)
     known = {item.chunk.chunk_id for item in evidence.chunks}
     if any(chunk_id not in known for chunk_id, _ in citations):
         raise ProviderFailure("model cited a chunk outside the evidence pack", error_class="InvalidCitation", transient=False, attempts=attempt, raw_reply=cleaned[:300], quality=True)

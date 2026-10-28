@@ -310,6 +310,14 @@ def test_ollama_prompt_has_no_literal_placeholder() -> None:
     assert prompts and "[chunk_id" not in prompts[0]
 
 
+def test_parser_normalizes_ollama_source_pipe_citation() -> None:
+    chunk = load_corpus(ROOT / "data/corpus.jsonl")[0]
+    evidence = EvidencePack(query="q", chunks=[{"chunk": chunk}])
+    draft = parse_text_answer(f"The answer is supported. [SOURCE {chunk.chunk_id} | {chunk.title}]", evidence, attempt=1, degraded=True)
+    assert f"[{chunk.chunk_id} — {chunk.title}]" in draft.answer
+    assert draft.cited_chunk_ids == [chunk.chunk_id]
+
+
 def test_circuit_breaker_opens_after_three_failures() -> None:
     breaker = CircuitBreaker(threshold=3, cooldown_seconds=60, clock=lambda: 0.0)
     for _ in range(3):
