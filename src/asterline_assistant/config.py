@@ -35,5 +35,8 @@ class Settings(BaseModel):
             eval_min_interval_seconds=float(os.getenv("ASTERLINE_EVAL_MIN_INTERVAL_SECONDS", os.getenv("ASTERLINE_EVAL_DELAY_SECONDS", "8"))),
             eval_no_fallback=os.getenv("ASTERLINE_EVAL_NO_FALLBACK", "0") == "1",
             eval_langsmith_project=os.getenv("ASTERLINE_EVAL_LANGSMITH_PROJECT", "asterline-eval"),
+            sqlite_path=Path(os.getenv("ASTERLINE_SQLITE_PATH", "data/asterline.sqlite3")),
+            chroma_path=Path(os.getenv("ASTERLINE_CHROMA_PATH", "data/chroma")),
+            fastembed_cache_path=Path(os.getenv("ASTERLINE_FASTEMBED_CACHE", ".cache/fastembed")),
         )
 

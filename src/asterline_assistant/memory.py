@@ -83,6 +83,15 @@ class MemoryStore:
         self.connection.commit()
         return result.rowcount
 
+    def delete_memory(self, user_id: str, memory_id: int) -> bool:
+        row = self.connection.execute("SELECT id FROM memories WHERE user_id = ? AND id = ?", (user_id, memory_id)).fetchone()
+        if row is None:
+            return False
+        self.connection.execute("DELETE FROM memory_vectors WHERE user_id = ? AND memory_id = ?", (user_id, memory_id))
+        self.connection.execute("DELETE FROM memories WHERE user_id = ? AND id = ?", (user_id, memory_id))
+        self.connection.commit()
+        return True
+
     def correct(self, user_id: str, target: str, replacement: str, session: str = "", turn: str = "") -> MemoryRecord | None:
         """Supersede only this user's old context; never make it authoritative."""
         rows = self.connection.execute("SELECT id FROM memories WHERE user_id = ? AND status = 'active' AND lower(content) LIKE ?", (user_id, f"%{target.lower()}%" )).fetchall()

@@ -15,10 +15,11 @@
   - [x] ran full 80-case FakeLLM baseline and improved evaluations; improved memory-query pollution was reduced
   - [x] focused graph, corpus, and memory tests passed
   - Not verified: full Gemini baseline/improved comparison or Gemini memory run; Gemini preflight was unavailable
-- [ ] C — Streamlit UI and headless coverage
-  - [ ] dark dense UI, sessions, chat, evidence, memory panel
-  - [ ] AppTest and startup checks
-  - [ ] tests and commit
+- [x] C — Streamlit UI and headless coverage
+  - [x] dark dense UI, sessions, chat, evidence, memory panel
+  - [x] AppTest startup, memory actions, FakeLLM remember, and user isolation passed
+  - [x] UI test suite passed: 3 passed
+  - Not verified: live `uv run asterline run` health endpoint; the shell could not start the long-running process in this environment
 - [ ] D — observability and trace exports
   - [ ] redaction test, optional uploads, representative exports
   - [ ] docs/TRACES.md

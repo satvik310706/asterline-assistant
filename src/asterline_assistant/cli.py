@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 from .config import Settings
@@ -52,7 +53,8 @@ def main() -> None:
         raise SystemExit(pytest.main(["tests"]))
     elif args.command == "run":
         validate_corpus_integrity(settings.corpus_path)
-        print("Asterline baseline is ready. Streamlit UI is deferred to a later phase.")
+        import subprocess
+        raise SystemExit(subprocess.call([sys.executable, "-m", "streamlit", "run", "app/streamlit_app.py"]))
     elif args.command == "ask":
         if not args.question:
             raise SystemExit("ask requires a question")
