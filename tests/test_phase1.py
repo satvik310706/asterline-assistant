@@ -11,7 +11,7 @@ import json
 import pytest
 
 from asterline_assistant.eval_runner import abstention_pass, cache_key, citation_pairs, fact_pass, superseded_pass
-from asterline_assistant.llm import AnswerDraft, CircuitBreaker, GeminiLLM, LLMProvider, ProviderFailure, ResilientLLM
+from asterline_assistant.llm import AnswerDraft, CircuitBreaker, GeminiLLM, LLMProvider, OllamaLLM, ProviderFailure, ResilientLLM
 from asterline_assistant.models import HistoryMessage
 from asterline_assistant.research import route
 from asterline_assistant.retrieval import HybridRetriever
@@ -140,7 +140,8 @@ def test_gemini_does_not_retry_configuration_error() -> None:
     provider.client = FakeGeminiClient([FakeAPIError(400)])
     with pytest.raises(ProviderFailure) as error:
         provider.answer("q", EvidencePack(query="q", chunks=[]))
-    assert error.value.error_class == "HTTP400"
+    assert error.value.status_code == 400
+    assert error.value.error_class == "FakeAPIError"
     assert sleeps == []
 
 
@@ -176,6 +177,68 @@ def test_double_outage_returns_clean_message_without_traceback() -> None:
     assert result.provider_error is True
     assert result.answer.startswith("The language model is temporarily unavailable;")
     assert "Traceback" not in result.answer
+    assert result.primary_error and "primary: gemini/test failed" in result.primary_error
+    assert result.fallback_error and "fallback: ollama/llama3.2:3b failed" in result.fallback_error
+
+
+def test_gemini_failure_followed_by_ollama_success_keeps_primary_diagnostic() -> None:
+    chunk = load_corpus(ROOT / "data/corpus.jsonl")[0]
+    reply = f"Current answer [{chunk.chunk_id} {chr(0x2014)} {chunk.title}]."
+    fallback = OllamaLLM("llama3.2:3b", request_fn=lambda _: reply)
+    result = ResilientLLM(failing_gemini(), fallback).answer("q", EvidencePack(query="q", chunks=[{"chunk": chunk}]))
+    assert result.degraded is True
+    assert result.primary_error and "primary: gemini/test failed" in result.primary_error
+    assert result.fallback_error is None
+
+
+def test_ollama_plain_text_validates_citations_and_retries_parse_failures() -> None:
+    chunk = load_corpus(ROOT / "data/corpus.jsonl")[0]
+    responses = iter(["{malformed", f"Answer [${chunk.chunk_id} — {chunk.title}]"])  # first response must be retried
+    provider = OllamaLLM("llama3.2:3b", request_fn=lambda _: next(responses).replace("[$", "["))
+    result = provider.answer("q", EvidencePack(query="q", chunks=[{"chunk": chunk}]))
+    assert result.cited_chunk_ids == [chunk.chunk_id]
+    assert provider.calls == 2
+
+
+@pytest.mark.parametrize("reply,error_class", [("Answer [missing:0 — Nope].", "CitationValidationError"), ("", "EmptyResponse")])
+def test_ollama_rejects_invalid_or_empty_text_after_one_retry(reply: str, error_class: str) -> None:
+    provider = OllamaLLM("llama3.2:3b", request_fn=lambda _: reply)
+    with pytest.raises(ProviderFailure) as error:
+        provider.answer("q", EvidencePack(query="q", chunks=[{"chunk": load_corpus(ROOT / "data/corpus.jsonl")[0]}]))
+    assert error.value.error_class == error_class
+    assert provider.calls == 2
+
+
+def test_config_errors_do_not_retry_or_trip_breaker() -> None:
+    breaker = CircuitBreaker(threshold=1)
+    provider = GeminiLLM("gone", breaker=breaker, sleep_fn=lambda _: pytest.fail("config errors must not sleep"))
+    provider.client = FakeGeminiClient([FakeAPIError(404)])
+    with pytest.raises(ProviderFailure) as error:
+        provider.answer("q", EvidencePack(query="q", chunks=[]))
+    assert error.value.status_code == 404
+    assert breaker.consecutive_failures == 0
+
+
+def test_preflight_reports_primary_and_fallback_errors() -> None:
+    primary = GeminiLLM("gone", max_attempts=1)
+    primary.client = FakeGeminiClient([FakeAPIError(404)])
+    fallback = OllamaLLM("llama3.2:3b", request_fn=lambda _: (_ for _ in ()).throw(TimeoutError("offline")))
+    with pytest.raises(ProviderFailure) as error:
+        ResilientLLM(primary, fallback).preflight(EvidencePack(query="q", chunks=[]))
+    assert "primary: gemini/gone failed" in str(error.value)
+    assert "fallback: ollama/llama3.2:3b failed" in str(error.value)
+
+
+def test_preflight_always_429_exhausts_once_without_fallback_retry_loop() -> None:
+    sleeps: list[float] = []
+    primary = GeminiLLM("busy", max_attempts=4, sleep_fn=sleeps.append, random_fn=lambda: 0.0)
+    primary.client = FakeGeminiClient([FakeAPIError(429), FakeAPIError(429), FakeAPIError(429), FakeAPIError(429)])
+    fallback = OllamaLLM("llama3.2:3b", request_fn=lambda _: (_ for _ in ()).throw(TimeoutError("offline")))
+    with pytest.raises(ProviderFailure) as error:
+        ResilientLLM(primary, fallback).preflight(EvidencePack(query="q", chunks=[]))
+    assert error.value.status_code == 429
+    assert primary.client.calls == 4
+    assert len(sleeps) == 3
 
 
 def test_circuit_breaker_opens_after_three_failures() -> None:

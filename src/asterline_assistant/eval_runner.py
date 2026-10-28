@@ -15,7 +15,7 @@ from typing import Any
 
 from .config import Settings
 from .corpus import load_corpus, validate_corpus_integrity
-from .llm import ProviderFailure, make_provider
+from .llm import ProviderFailure, ResilientLLM, make_provider
 from .memory import MemoryStore
 from .models import AnswerDraft, EvidencePack, HistoryMessage, ResearchResponse
 from .research import build_evidence, retrieve, route, run_research
@@ -83,8 +83,8 @@ def _safe_error(error: Exception) -> tuple[str, str]:
     return error_class, message or "evaluation case failed"
 
 
-def _source_only_response(evidence: EvidencePack, provider: str, model: str, error_class: str, provider_error: bool) -> ResearchResponse:
-    return ResearchResponse(answer="The language model is temporarily unavailable; here are the most relevant sources:", evidence=evidence.chunks, provider=provider, model=model, degraded=True, provider_error=provider_error, error_class=error_class, attempts=0)
+def _source_only_response(evidence: EvidencePack, provider: str, model: str, error_class: str, provider_error: bool, primary_error: str | None = None, fallback_error: str | None = None) -> ResearchResponse:
+    return ResearchResponse(answer="The language model is temporarily unavailable; here are the most relevant sources:", evidence=evidence.chunks, provider=provider, model=model, degraded=True, provider_error=provider_error, error_class=error_class, primary_error=primary_error, fallback_error=fallback_error, attempts=0)
 
 
 def _case_result(row: dict[str, Any], response: ResearchResponse, status: str, elapsed_ms: float, calls: int) -> dict[str, Any]:
@@ -108,7 +108,7 @@ def _case_result(row: dict[str, Any], response: ResearchResponse, status: str, e
             "conflict_handling": float(conflict) if conflict is not None else None,
             "abstention_accuracy": float(response.abstained == (row.get("expected") == "abstain")),
         }
-    return {"id": row["id"], "category": row["category"], "question": row["question"], "answer": response.answer, "status": status, "cited": [{"chunk_id": chunk_id, "title": title} for chunk_id, title in cited], "retrieved_not_cited": [chunk_id for chunk_id in retrieved if chunk_id not in cited_ids], "retrieved_chunk_ids": retrieved, "provider": response.provider, "model": response.model, "degraded": response.degraded, "provider_error": response.provider_error, "error_class": response.error_class, "checks": checks, "latency_ms": elapsed_ms, "llm_calls": calls}
+    return {"id": row["id"], "category": row["category"], "question": row["question"], "answer": response.answer, "status": status, "cited": [{"chunk_id": chunk_id, "title": title} for chunk_id, title in cited], "retrieved_not_cited": [chunk_id for chunk_id in retrieved if chunk_id not in cited_ids], "retrieved_chunk_ids": retrieved, "provider": response.provider, "model": response.model, "degraded": response.degraded, "provider_error": response.provider_error, "error_class": response.error_class, "primary_error": response.primary_error, "fallback_error": response.fallback_error, "checks": checks, "latency_ms": elapsed_ms, "llm_calls": calls}
 
 
 def _summary(case_results: list[dict[str, Any]], rows: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
@@ -120,7 +120,7 @@ def _summary(case_results: list[dict[str, Any]], rows: list[dict[str, Any]]) -> 
     by_category: dict[str, dict[str, Any]] = {}
     for category in sorted({result["category"] for result in case_results}):
         by_category[category] = {metric: metric_summary([result for result in case_results if result["category"] == category], metric) for metric in metrics}
-    provider_errors = [{"id": result["id"], "category": result["category"], "provider": result["provider"], "error_class": result.get("error_class"), "reason": "language model providers unavailable"} for result in case_results if result["status"] == "provider_error"]
+    provider_errors = [{"id": result["id"], "category": result["category"], "provider": result["provider"], "error_class": result.get("error_class"), "primary_error": result.get("primary_error"), "fallback_error": result.get("fallback_error"), "reason": "language model providers unavailable"} for result in case_results if result["status"] == "provider_error"]
     eval_errors = [{"id": result["id"], "category": result["category"], "error_class": result.get("error_class"), "message": result.get("error_message", "evaluation case failed")} for result in case_results if result["status"] == "eval_error"]
     failures = [{"id": result["id"], "category": result["category"], "failed": [metric for metric, value in result["checks"].items() if value is not None and not value], "reason": "one or more deterministic checks failed"} for result in case_results if result["status"] == "ok" and any(value is not None and not value for value in result["checks"].values())]
     providers: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
@@ -137,12 +137,14 @@ def _summary(case_results: list[dict[str, Any]], rows: list[dict[str, Any]]) -> 
     return overall, by_category | {"by_provider": by_provider}, provider_errors, failures + eval_errors
 
 
-def run(dataset: Path, settings: Settings) -> Path:
+def run(dataset: Path, settings: Settings, limit: int | None = None) -> Path:
     validate_corpus_integrity(settings.corpus_path)
     retriever = HybridRetriever(load_corpus(settings.corpus_path), settings.chroma_path, settings.fastembed_cache_path)
     provider = make_provider(settings.llm_provider, settings.gemini_model, settings.ollama_model)
     memory = MemoryStore(settings.sqlite_path)
     rows = [json.loads(line) for line in dataset.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if limit is not None:
+        rows = rows[:limit]
     cache_path = Path("eval/results/cache/responses.json")
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.exists() else {}
@@ -154,6 +156,21 @@ def run(dataset: Path, settings: Settings) -> Path:
     old_project = os.environ.get("LANGSMITH_PROJECT")
     os.environ["LANGSMITH_PROJECT"] = settings.eval_langsmith_project
     try:
+        if provider.name != "fake":
+            first_row = rows[0] if rows else None
+            if first_row is not None:
+                first_history = [HistoryMessage.model_validate(item) for item in first_row.get("history", [])]
+                first_query = route(first_row["question"], first_history)
+                first_evidence = build_evidence(retrieve(first_query, retriever))
+                try:
+                    if isinstance(provider, ResilientLLM):
+                        provider.preflight(first_evidence)
+                    else:
+                        provider.answer("Reply with one word: ready", first_evidence)
+                except ProviderFailure as error:
+                    print(str(error))
+                    print("Eval preflight failed; no cases were started.")
+                    return output_path
         for row in rows:
             started = time.perf_counter()
             status = "ok"
@@ -168,23 +185,25 @@ def run(dataset: Path, settings: Settings) -> Path:
                 query = route(row["question"], history)
                 evidence = build_evidence(retrieve(query, retriever))
                 key = cache_key(row, provider.name, provider.model, settings.config, evidence)
-                if key in cache:
-                    cached = cache[key]
+                cached_entry = cache.get(key)
+                cached_status = cached_entry.get("status") if isinstance(cached_entry, dict) and "response" in cached_entry else ("provider_error" if isinstance(cached_entry, dict) and cached_entry.get("provider_error") else "ok")
+                if cached_entry is not None and cached_status == "ok":
+                    cached = cached_entry
                     cached_response = cached.get("response", cached) if isinstance(cached, dict) else cached
                     response = ResearchResponse.model_validate(cached_response)
                     response.evidence = evidence.chunks
                     status = cached.get("status", "provider_error" if response.provider_error else "ok") if isinstance(cached, dict) else ("provider_error" if response.provider_error else "ok")
                     error_message = cached.get("error_message") if isinstance(cached, dict) else None
                 else:
-                    if settings.eval_delay_seconds > 0 and case_results:
-                        time.sleep(settings.eval_delay_seconds)
+                    if settings.eval_min_interval_seconds > 0 and case_results and provider.name != "fake":
+                        time.sleep(settings.eval_min_interval_seconds)
                     response = run_research(row["question"], "eval", retriever, provider, memory, history=history, prepared_query=query, prepared_evidence=evidence)
                 if response.provider_error:
                     status = "provider_error"
             except ProviderFailure as error:
                 status = "provider_error"
                 error_class, error_message = _safe_error(error)
-                response = _source_only_response(evidence if "evidence" in locals() else EvidencePack(query=row["question"], chunks=[]), provider.name, provider.model, error_class, True)
+                response = _source_only_response(evidence if "evidence" in locals() else EvidencePack(query=row["question"], chunks=[]), provider.name, provider.model, error_class, True, getattr(error, "primary_error", None), getattr(error, "fallback_error", None))
             except Exception as error:
                 status = "eval_error"
                 error_class, error_message = _safe_error(error)
@@ -203,6 +222,9 @@ def run(dataset: Path, settings: Settings) -> Path:
             _atomic_write(output_path, {"status": "partial", "config": settings.config, "provider": provider.name, "model": provider.model, "cases": len(rows), "completed": len(case_results), "overall": overall, "by_category": {key: value for key, value in grouped.items() if key != "by_provider"}, "by_provider": grouped.get("by_provider", {}), "provider_errors": provider_errors, "failures": failures, "case_results": case_results})
             passed = status == "ok" and not any(value is not None and not value for value in result["checks"].values())
             print(f"{row['id']} {'PASS' if passed else status.upper() if status != 'ok' else 'FAIL'} {(time.perf_counter() - started):.2f}s")
+            if len(case_results) >= 10 and sum(item["status"] == "provider_error" for item in case_results[:10]) / 10 > 0.3:
+                print("Eval stopped: more than 30% of the first 10 cases were provider_error.")
+                break
         overall, grouped, provider_errors, failures = _summary(case_results, rows)
         report = {"status": "complete", "config": settings.config, "provider": provider.name, "model": provider.model, "cases": len(rows), "overall": overall, "by_category": {key: value for key, value in grouped.items() if key != "by_provider"}, "by_provider": grouped.get("by_provider", {}), "provider_errors": provider_errors, "failures": failures, "case_results": case_results}
         _atomic_write(output_path, report)
@@ -212,8 +234,13 @@ def run(dataset: Path, settings: Settings) -> Path:
             summary = overall[metric]
             print(f"{metric}: {summary['value']:.2f} ({summary['applicable']}/{summary['total']} applicable)")
         print("PROVIDER_ERRORS:")
+        error_counts: dict[str, int] = defaultdict(int)
         for item in provider_errors:
             print(json.dumps(item, sort_keys=True))
+            error_counts[str(item.get("error_class"))] += 1
+        print("PROVIDER_ERROR_CLASSES:")
+        for error_class, count in sorted(error_counts.items()):
+            print(f"{error_class}: {count}")
         print("FAILURES:")
         for item in failures:
             print(json.dumps(item, sort_keys=True))

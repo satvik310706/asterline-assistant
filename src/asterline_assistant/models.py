@@ -44,6 +44,8 @@ class AnswerDraft(BaseModel):
     degraded: bool = False
     attempts: int = 0
     error_class: str | None = None
+    primary_error: str | None = None
+    fallback_error: str | None = None
     trace_metadata: dict[str, str | int | bool | None] = Field(default_factory=dict)
 
 
@@ -58,6 +60,8 @@ class ResearchResponse(BaseModel):
     degraded: bool = False
     attempts: int = 0
     error_class: str | None = None
+    primary_error: str | None = None
+    fallback_error: str | None = None
     provider_error: bool = False
 
 

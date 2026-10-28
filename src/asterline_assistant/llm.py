@@ -16,16 +16,19 @@ from google import genai
 from .models import AnswerDraft, EvidencePack
 
 TRANSIENT_CODES = {429, 500, 503, 504}
+CONFIG_CODES = {400, 401, 403, 404}
+CONFIG_MARKERS = ("model not found", "model no longer available", "not_found", "not found")
 
 
 class ProviderFailure(RuntimeError):
-    def __init__(self, message: str, *, error_class: str, transient: bool, status_code: int | None = None, retry_after: float | None = None, attempts: int = 0) -> None:
+    def __init__(self, message: str, *, error_class: str, transient: bool, status_code: int | None = None, retry_after: float | None = None, attempts: int = 0, detail: str | None = None) -> None:
         super().__init__(message)
         self.error_class = error_class
         self.transient = transient
         self.status_code = status_code
         self.retry_after = retry_after
         self.attempts = attempts
+        self.detail = detail or message
 
 
 class CircuitBreaker:
@@ -60,7 +63,7 @@ def _status_code(error: Exception) -> int | None:
         value = getattr(error, name, None)
         if isinstance(value, int):
             return value
-    match = re.search(r"\b(400|401|403|429|500|503|504)\b", str(error))
+    match = re.search(r"\b(400|401|403|404|429|500|503|504)\b", str(error))
     return int(match.group(1)) if match else None
 
 
@@ -85,9 +88,20 @@ def _retry_after(error: Exception) -> float | None:
 
 def classify_failure(error: Exception, attempts: int = 0) -> ProviderFailure:
     code = _status_code(error)
-    transient = code in TRANSIENT_CODES or isinstance(error, TimeoutError) or "timeout" in error.__class__.__name__.lower()
-    error_class = f"HTTP{code}" if code else error.__class__.__name__
-    return ProviderFailure("provider request failed", error_class=error_class, transient=transient, status_code=code, retry_after=_retry_after(error), attempts=attempts)
+    detail = _sanitize(str(error)) or "provider request failed"
+    config_error = code in CONFIG_CODES or any(marker in detail.lower() for marker in CONFIG_MARKERS)
+    transient = not config_error and (code in TRANSIENT_CODES or isinstance(error, TimeoutError) or "timeout" in error.__class__.__name__.lower())
+    message = "Gemini rejected the model/key: check GEMINI_MODEL and your key." if config_error else "provider request failed"
+    return ProviderFailure(message, error_class=error.__class__.__name__, transient=transient, status_code=code, retry_after=_retry_after(error), attempts=attempts, detail=detail)
+
+
+def _sanitize(value: str) -> str:
+    return re.sub(r"(?i)(api[_ -]?key|token|password|authorization)\s*[:=]?\s*[^\s,;]+", r"\1=<redacted>", value).replace("\n", " ")[:240]
+
+
+def format_failure(provider: str, model: str, failure: ProviderFailure, role: str) -> str:
+    status = f" {failure.status_code}" if failure.status_code is not None else ""
+    return f"{role}: {provider}/{model} failed: {failure.error_class}{status} {_sanitize(failure.detail)}"
 
 
 class LLMProvider:
@@ -173,24 +187,49 @@ class GeminiLLM(LLMProvider):
 class OllamaLLM(LLMProvider):
     name = "ollama"
 
-    def __init__(self, model: str) -> None:
+    def __init__(self, model: str, request_fn: Callable[[str], str] | None = None) -> None:
         super().__init__()
         self.model = model
+        self.request_fn = request_fn or self._request
 
     def answer(self, question: str, evidence: EvidencePack) -> AnswerDraft:
-        self.calls += 1
-        context = "\n".join(f"{x.chunk.chunk_id}: {x.chunk.text}" for x in evidence.chunks)
-        payload = json.dumps({"model": self.model, "prompt": f"Answer briefly from evidence only. Question: {question}\n{context}", "stream": False, "format": "json"}).encode()
+        context = "\n".join(f"{x.chunk.chunk_id} | {x.chunk.title} | {x.chunk.text}" for x in evidence.chunks)
+        errors: list[ProviderFailure] = []
+        for attempt in (1, 2):
+            self.calls += 1
+            try:
+                prompt = f"Answer briefly using only the evidence. Cite sources exactly as [chunk_id — title]. Question: {question}\nEvidence:\n{context}"
+                if attempt == 2:
+                    prompt = f"Answer in one or two sentences and cite one source as [chunk_id — title]. Q: {question}\n{context}"
+                text = self.request_fn(prompt)
+                return self._parse_text(text, evidence, attempt)
+            except ProviderFailure as error:
+                errors.append(error)
+                if error.error_class in {"CitationValidationError", "ResponseParseError", "EmptyResponse"} and attempt == 1:
+                    continue
+                raise error from None
+            except Exception as error:
+                raise classify_failure(error, attempts=attempt) from None
+        raise errors[-1] if errors else ProviderFailure("Ollama returned no answer", error_class="EmptyResponse", transient=False, attempts=2)
+
+    def _request(self, prompt: str) -> str:
+        payload = json.dumps({"model": self.model, "prompt": prompt, "stream": False}).encode()
         request = urllib.request.Request("http://localhost:11434/api/generate", data=payload, headers={"Content-Type": "application/json"})
-        try:
-            with urllib.request.urlopen(request, timeout=60) as response:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            try:
                 result = json.loads(response.read())
-            draft = AnswerDraft.model_validate(json.loads(result["response"]))
-            draft.degraded = True
-            draft.trace_metadata = {"provider": self.name, "model": self.model, "attempts": 1, "degraded": True, "error_class": None}
-            return draft
-        except Exception as error:
-            raise classify_failure(error, attempts=1) from None
+            except json.JSONDecodeError as error:
+                raise ProviderFailure("Ollama response was not valid JSON", error_class="ResponseParseError", transient=False, attempts=1, detail=str(error)) from None
+        return str(result.get("response", ""))
+
+    def _parse_text(self, text: str, evidence: EvidencePack, attempt: int) -> AnswerDraft:
+        if not text.strip():
+            raise ProviderFailure("Ollama returned an empty reply", error_class="EmptyResponse", transient=False, attempts=attempt)
+        citations = re.findall(r"\[([^\s—]+)\s+—\s+([^\]]+)\]", text)
+        known = {item.chunk.chunk_id: item.chunk.title for item in evidence.chunks}
+        if not citations or any(chunk_id not in known for chunk_id, _ in citations):
+            raise ProviderFailure("Ollama cited a source outside the evidence pack", error_class="CitationValidationError", transient=False, attempts=attempt)
+        return AnswerDraft(answer=text.strip(), cited_chunk_ids=[chunk_id for chunk_id, _ in citations], degraded=True, attempts=attempt, trace_metadata={"provider": self.name, "model": self.model, "attempts": attempt, "degraded": True, "error_class": None})
 
 
 class ResilientLLM(LLMProvider):
@@ -216,14 +255,30 @@ class ResilientLLM(LLMProvider):
                 self.name, self.model = self.fallback.name, self.fallback.model
                 draft.degraded = True
                 draft.attempts = primary_error.attempts + max(1, getattr(draft, "attempts", 1))
+                primary_text = format_failure(self.primary.name, self.primary.model, primary_error, "primary")
+                draft.primary_error = primary_text
                 draft.error_class = primary_error.error_class
-                draft.trace_metadata = {"provider": self.name, "model": self.model, "attempts": primary_error.attempts + 1, "degraded": True, "error_class": primary_error.error_class}
+                draft.trace_metadata = {"provider": self.name, "model": self.model, "attempts": primary_error.attempts + 1, "degraded": True, "error_class": primary_error.error_class, "primary_error": primary_text, "fallback_error": None}
                 return draft
             except ProviderFailure as fallback_error:
                 self.calls = self.primary.calls + self.fallback.calls
                 self.name, self.model = "unavailable", self.fallback.model
                 message = "The language model is temporarily unavailable; here are the most relevant sources:"
-                return AnswerDraft(answer=message, degraded=True, provider_error=True, attempts=primary_error.attempts + fallback_error.attempts, error_class=fallback_error.error_class, trace_metadata={"provider": "unavailable", "model": self.fallback.model, "attempts": primary_error.attempts + fallback_error.attempts, "degraded": True, "error_class": fallback_error.error_class})
+                primary_text = format_failure(self.primary.name, self.primary.model, primary_error, "primary")
+                fallback_text = format_failure(self.fallback.name, self.fallback.model, fallback_error, "fallback")
+                return AnswerDraft(answer=message, degraded=True, provider_error=True, attempts=primary_error.attempts + fallback_error.attempts, error_class=primary_error.error_class, primary_error=primary_text, fallback_error=fallback_text, trace_metadata={"provider": "unavailable", "model": self.fallback.model, "attempts": primary_error.attempts + fallback_error.attempts, "degraded": True, "error_class": primary_error.error_class, "primary_error": primary_text, "fallback_error": fallback_text})
+
+    def preflight(self, evidence: EvidencePack) -> None:
+        try:
+            self.primary.answer("Reply with one word: ready", evidence)
+        except ProviderFailure as primary_error:
+            try:
+                self.fallback.answer("Reply with one word: ready", evidence)
+            except ProviderFailure as fallback_error:
+                primary_text = format_failure(self.primary.name, self.primary.model, primary_error, "primary")
+                fallback_text = format_failure(self.fallback.name, self.fallback.model, fallback_error, "fallback")
+                raise ProviderFailure(f"{primary_text}; {fallback_text}", error_class=primary_error.error_class, transient=False, status_code=primary_error.status_code, attempts=primary_error.attempts + fallback_error.attempts, detail=f"{primary_text}; {fallback_text}") from None
+            raise ProviderFailure(format_failure(self.primary.name, self.primary.model, primary_error, "primary"), error_class=primary_error.error_class, transient=False, status_code=primary_error.status_code, attempts=primary_error.attempts, detail=format_failure(self.primary.name, self.primary.model, primary_error, "primary")) from None
 
 
 def make_provider(provider: str, gemini_model: str, ollama_model: str) -> LLMProvider:

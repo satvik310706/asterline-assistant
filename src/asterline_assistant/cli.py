@@ -21,6 +21,7 @@ def main() -> None:
     parser.add_argument("--provider", choices=["gemini", "ollama", "fake"])
     parser.add_argument("--config", choices=["baseline", "improved"])
     parser.add_argument("--user", default="alice")
+    parser.add_argument("--limit", type=int)
     args = parser.parse_args()
     settings = Settings.from_environment()
     if args.config:
@@ -32,7 +33,7 @@ def main() -> None:
         dataset = Path("eval/datasets/research.jsonl")
         if not dataset.exists():
             raise SystemExit("Evaluation dataset not found: eval/datasets/research.jsonl")
-        print(run_eval(dataset, settings))
+        print(run_eval(dataset, settings, limit=args.limit))
     elif args.command == "test":
         import pytest
         raise SystemExit(pytest.main(["tests"]))
@@ -51,6 +52,10 @@ def main() -> None:
         print(f"degraded: {response.degraded}")
         if response.error_class:
             print(f"provider error class: {response.error_class}")
+        if response.primary_error:
+            print(response.primary_error)
+        if response.fallback_error:
+            print(response.fallback_error)
         cited = citation_pairs(response.answer)
         cited_ids = {chunk_id for chunk_id, _ in cited}
         print("cited:")
