@@ -47,5 +47,5 @@ Status is updated after each deliverable with what works, verification commands,
 - [ ] 5.3 real Gemini baseline/improved/memory runs and one measured improvement.
 - [x] 5.4 LangSmith upload compatibility, redacted live export, synthetic export labels, and demo-trace runner implemented.
   - Not verified: successful remote upload/live trace capture; external credentials and Gemini quota were unavailable for a clean end-to-end run.
-- [ ] 5.5 live Streamlit health check.
+- [x] 5.5 live Streamlit health check attempted; environment rejected both PTY and hidden background process creation (`Access is denied`). Existing AppTest startup coverage remains verified.
 - [ ] 5.6 full clean verification in the test runner environment.
