@@ -24,6 +24,7 @@ def main() -> None:
     parser.add_argument("--user", default="alice")
     parser.add_argument("--limit", type=int)
     parser.add_argument("--skip-preflight", action="store_true")
+    parser.add_argument("--no-fallback", action="store_true")
     args = parser.parse_args()
     settings = Settings.from_environment()
     if args.config:
@@ -35,11 +36,15 @@ def main() -> None:
         dataset = Path("eval/datasets/research.jsonl")
         if not dataset.exists():
             raise SystemExit("Evaluation dataset not found: eval/datasets/research.jsonl")
+        if args.no_fallback:
+            settings = settings.model_copy(update={"eval_no_fallback": True})
         print(run_eval(dataset, settings, limit=args.limit, skip_preflight=args.skip_preflight))
     elif args.command == "eval-memory":
         dataset = Path("eval/datasets/memory.jsonl")
         if not dataset.exists():
             raise SystemExit("Memory evaluation dataset not found: eval/datasets/memory.jsonl")
+        if args.no_fallback:
+            settings = settings.model_copy(update={"eval_no_fallback": True})
         print(run_memory_eval(dataset, settings, provider_name=args.provider or settings.llm_provider, limit=args.limit))
     elif args.command == "test":
         import pytest

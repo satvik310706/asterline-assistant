@@ -157,7 +157,7 @@ class FakeLLM(LLMProvider):
 class GeminiLLM(LLMProvider):
     name = "gemini"
 
-    def __init__(self, model: str, *, breaker: CircuitBreaker | None = None, sleep_fn: Callable[[float], None] = time.sleep, random_fn: Callable[[], float] = random.random, max_attempts: int = 4, max_total_wait: float = 30.0) -> None:
+    def __init__(self, model: str, *, breaker: CircuitBreaker | None = None, sleep_fn: Callable[[float], None] = time.sleep, random_fn: Callable[[], float] = random.random, max_attempts: int = 5, max_total_wait: float = 45.0) -> None:
         super().__init__()
         self.model = model
         self.breaker = breaker or CircuitBreaker()
@@ -334,9 +334,11 @@ class ResilientLLM(LLMProvider):
             raise ProviderFailure(format_failure(self.primary.name, self.primary.model, primary_error, "primary"), error_class=primary_error.error_class, transient=False, status_code=primary_error.status_code, attempts=primary_error.attempts, detail=format_failure(self.primary.name, self.primary.model, primary_error, "primary")) from None
 
 
-def make_provider(provider: str, gemini_model: str, ollama_model: str) -> LLMProvider:
+def make_provider(provider: str, gemini_model: str, ollama_model: str, *, no_fallback: bool = False) -> LLMProvider:
     if provider == "fake" or (provider == "auto" and not os.getenv("GEMINI_API_KEY")):
         return FakeLLM()
     if provider in {"auto", "gemini"}:
+        if no_fallback:
+            return GeminiLLM(gemini_model)
         return ResilientLLM(GeminiLLM(gemini_model), OllamaLLM(ollama_model))
     return OllamaLLM(ollama_model)

@@ -140,7 +140,16 @@ def _summary(case_results: list[dict[str, Any]], rows: list[dict[str, Any]]) -> 
 def run(dataset: Path, settings: Settings, limit: int | None = None, skip_preflight: bool = False) -> Path:
     validate_corpus_integrity(settings.corpus_path)
     retriever = HybridRetriever(load_corpus(settings.corpus_path), settings.chroma_path, settings.fastembed_cache_path)
-    provider = make_provider(settings.llm_provider, settings.gemini_model, settings.ollama_model)
+    no_fallback = settings.eval_no_fallback
+    try:
+        provider = make_provider(settings.llm_provider, settings.gemini_model, settings.ollama_model, no_fallback=no_fallback)
+    except TypeError as error:
+        # Keep small test doubles written against the Phase 1 factory compatible.
+        if "no_fallback" not in str(error):
+            raise
+        provider = make_provider(settings.llm_provider, settings.gemini_model, settings.ollama_model)
+    requested_provider = provider.name
+    requested_model = provider.model
     memory = MemoryStore(settings.sqlite_path)
     rows = [json.loads(line) for line in dataset.read_text(encoding="utf-8").splitlines() if line.strip()]
     if limit is not None:
@@ -184,7 +193,8 @@ def run(dataset: Path, settings: Settings, limit: int | None = None, skip_prefli
                 set_trace_context({"eval_run_id": eval_run_id, "case_id": row["id"], "category": row["category"], "config": settings.config, "provider": provider.name, "model": provider.model, "attempts": 0, "degraded": False})
                 query = route(row["question"], history)
                 evidence = build_evidence(retrieve(query, retriever))
-                key = cache_key(row, provider.name, provider.model, settings.config, evidence)
+                # Cache identity is the requested provider, not whichever fallback served a prior response.
+                key = cache_key(row, requested_provider, requested_model, settings.config, evidence)
                 cached_entry = cache.get(key)
                 cached_status = cached_entry.get("status") if isinstance(cached_entry, dict) and "response" in cached_entry else ("provider_error" if isinstance(cached_entry, dict) and cached_entry.get("provider_error") else "ok")
                 if cached_entry is not None and cached_status == "ok":
@@ -219,14 +229,14 @@ def run(dataset: Path, settings: Settings, limit: int | None = None, skip_prefli
                 cache[key] = {"response": response.model_dump(mode="json"), "status": status, "error_message": error_message}
             _atomic_write(cache_path, cache)
             overall, grouped, provider_errors, failures = _summary(case_results, rows[:len(case_results)])
-            _atomic_write(output_path, {"status": "partial", "config": settings.config, "provider": provider.name, "model": provider.model, "cases": len(rows), "completed": len(case_results), "overall": overall, "by_category": {key: value for key, value in grouped.items() if key != "by_provider"}, "by_provider": grouped.get("by_provider", {}), "provider_errors": provider_errors, "failures": failures, "case_results": case_results})
+            _atomic_write(output_path, {"status": "partial", "config": settings.config, "provider": requested_provider, "model": requested_model, "no_fallback": no_fallback, "cases": len(rows), "completed": len(case_results), "overall": overall, "by_category": {key: value for key, value in grouped.items() if key != "by_provider"}, "by_provider": grouped.get("by_provider", {}), "provider_errors": provider_errors, "failures": failures, "case_results": case_results})
             passed = status in {"ok", "quality_error"} and not any(value is not None and not value for value in result["checks"].values())
             print(f"{row['id']} {'PASS' if passed else status.upper() if status != 'ok' else 'FAIL'} {(time.perf_counter() - started):.2f}s")
             if len(case_results) >= 10 and sum(item["status"] == "provider_error" for item in case_results[:10]) / 10 > 0.3:
                 print("Eval stopped: more than 30% of the first 10 cases were provider_error.")
                 break
         overall, grouped, provider_errors, failures = _summary(case_results, rows)
-        report = {"status": "complete", "config": settings.config, "provider": provider.name, "model": provider.model, "cases": len(rows), "overall": overall, "by_category": {key: value for key, value in grouped.items() if key != "by_provider"}, "by_provider": grouped.get("by_provider", {}), "provider_errors": provider_errors, "failures": failures, "case_results": case_results}
+        report = {"status": "complete", "config": settings.config, "provider": requested_provider, "model": requested_model, "no_fallback": no_fallback, "cases": len(rows), "overall": overall, "by_category": {key: value for key, value in grouped.items() if key != "by_provider"}, "provider_errors": provider_errors, "failures": failures, "case_results": case_results}
         _atomic_write(output_path, report)
         print(json.dumps({"overall": overall, "by_provider": grouped.get("by_provider", {})}, indent=2))
         print("APPLICABLE_METRICS:")

@@ -8,3 +8,6 @@ data/chroma/
 data/*.sqlite3
 .cache/
 eval/results/cache/
+.cache/
+eval/results/
+eval/results/cache/
