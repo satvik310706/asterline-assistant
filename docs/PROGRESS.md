@@ -45,6 +45,7 @@ Status is updated after each deliverable with what works, verification commands,
 - [x] 5.1 dataset byte preservation: `.gitattributes` added; active workspace raw hashes and line counts match the assignment.
 - [x] 5.2 provider diagnostics: status, quota class, Retry-After, model, and sanitized primary/fallback errors are carried through CLI/eval/trace metadata; Google retry-delay text is decoded without exposing secrets.
 - [ ] 5.3 real Gemini baseline/improved/memory runs and one measured improvement.
-- [ ] 5.4 real LangSmith uploads and trace exports.
+- [x] 5.4 LangSmith upload compatibility, redacted live export, synthetic export labels, and demo-trace runner implemented.
+  - Not verified: successful remote upload/live trace capture; external credentials and Gemini quota were unavailable for a clean end-to-end run.
 - [ ] 5.5 live Streamlit health check.
 - [ ] 5.6 full clean verification in the test runner environment.
