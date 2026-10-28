@@ -141,3 +141,51 @@ def test_langsmith_upload_uses_current_client_api(tmp_path: Path, monkeypatch) -
     assert "attempted" in message
     assert [kind for kind, _ in calls] == ["dataset", "examples"]
     assert calls[1][1]["examples"][0]["metadata"]["synthetic"] is True
+
+
+def test_langsmith_upload_includes_report_cases_and_redacts_sensitive_text(tmp_path: Path, monkeypatch) -> None:
+    dataset = tmp_path / "research.jsonl"
+    dataset.write_text(
+        json.dumps({"id": "S01", "category": "single-fact", "question": "Use password=synthetic-pass-77", "expected": "answer"}) + "\n",
+        encoding="utf-8",
+    )
+    report = tmp_path / "improved_fake.json"
+    report.write_text(json.dumps({
+        "config": "improved",
+        "provider": "fake",
+        "case_results": [{"id": "S01", "question": "Use password=synthetic-pass-77", "answer": "Authorization: Bearer synthetic-token-88", "status": "ok"}],
+    }), encoding="utf-8")
+    captured: list[dict] = []
+
+    class Dataset:
+        id = "dataset-id"
+
+    class Client:
+        def create_dataset(self, **kwargs):
+            return Dataset()
+
+        def create_examples(self, **kwargs):
+            captured.extend(kwargs["examples"])
+
+    monkeypatch.setenv("LANGSMITH_API_KEY", "present")
+    monkeypatch.setattr("langsmith.Client", Client)
+
+    message = observability.maybe_upload(dataset, report)
+
+    assert "attempted" in message
+    assert len(captured) == 1
+    encoded = json.dumps(captured)
+    assert "synthetic-pass-77" not in encoded
+    assert "synthetic-token-88" not in encoded
+    assert "[REDACTED]" in encoded
+    assert captured[0]["outputs"]["answer"] == "Authorization: Bearer [REDACTED]"
+
+
+def test_trace_handoff_marks_missing_real_links_and_explains_public_sharing() -> None:
+    docs = Path(__file__).parents[1] / "docs" / "TRACES.md"
+    contents = docs.read_text(encoding="utf-8")
+
+    assert "PENDING — paste public trace URL" in contents
+    assert "local illustrations, not remotely captured traces" in contents
+    assert "radialpulse@nxtwave.co.in" in contents
+    assert "More` menu and choose `Share`" in contents

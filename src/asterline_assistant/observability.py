@@ -6,8 +6,20 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from .memory import redact_sensitive
+
+
+def _redact_payload(value: Any) -> Any:
+    """Redact every string leaf before sending synthetic examples to LangSmith."""
+    if isinstance(value, str):
+        return redact_sensitive(value)
+    if isinstance(value, dict):
+        return {key: _redact_payload(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact_payload(item) for item in value]
+    return value
 
 
 def maybe_upload(dataset: Path | None = None, report: Path | None = None) -> str:
@@ -16,31 +28,56 @@ def maybe_upload(dataset: Path | None = None, report: Path | None = None) -> str
     try:
         from langsmith import Client
 
-        client = Client()
         dataset_name = f"asterline-{dataset.stem}" if dataset is not None else "asterline-eval"
-        created = client.create_dataset(dataset_name=dataset_name, description="Asterline synthetic evaluation dataset")
-        examples = []
+        dataset_rows: list[dict] = []
         if dataset is not None:
             for line in dataset.read_text(encoding="utf-8").splitlines():
                 if not line.strip():
                     continue
-                row = json.loads(line)
-                examples.append({
-                    "inputs": {"question": row.get("question", ""), "history": row.get("history", [])},
-                    "outputs": {"expected": row.get("expected"), "gold_chunks": row.get("gold_chunks", [])},
-                    "metadata": {"category": row.get("category"), "synthetic": True},
-                })
+                dataset_rows.append(json.loads(line))
+        report_data = {}
         if report is not None and report.exists():
             report_data = json.loads(report.read_text(encoding="utf-8"))
-            for case in report_data.get("cases", []):
-                examples.append({
-                    "inputs": {"question": case.get("question", "")},
-                    "outputs": {"answer": case.get("answer", ""), "status": case.get("status")},
-                    "metadata": {"synthetic": True, "config": report_data.get("config")},
-                })
+        report_cases = report_data.get("case_results", [])
+        cases_by_id = {str(case.get("id")): case for case in report_cases if isinstance(case, dict) and case.get("id") is not None}
+        examples = []
+        uploaded_ids: set[str] = set()
+        for row in dataset_rows:
+            case_id = str(row.get("id", ""))
+            case = cases_by_id.get(case_id, {})
+            outputs = {
+                "expected": row.get("expected"),
+                "gold_chunks": row.get("gold_chunks", []),
+                "gold_facts": row.get("gold_facts", []),
+            }
+            if case:
+                outputs.update({"answer": case.get("answer", ""), "status": case.get("status"), "cited": case.get("cited", [])})
+                uploaded_ids.add(case_id)
+            examples.append(_redact_payload({
+                "inputs": {"question": row.get("question", ""), "history": row.get("history", [])},
+                "outputs": outputs,
+                "metadata": {
+                    "case_id": case_id,
+                    "category": row.get("category"),
+                    "synthetic": True,
+                    "config": report_data.get("config"),
+                    "provider": report_data.get("provider"),
+                },
+            }))
+        for case_id, case in cases_by_id.items():
+            if case_id in uploaded_ids:
+                continue
+            examples.append(_redact_payload({
+                "inputs": {"question": case.get("question", "")},
+                "outputs": {"answer": case.get("answer", ""), "status": case.get("status"), "cited": case.get("cited", [])},
+                "metadata": {"case_id": case_id, "synthetic": True, "config": report_data.get("config"), "provider": report_data.get("provider")},
+            }))
         if examples:
+            client = Client()
+            created = client.create_dataset(dataset_name=dataset_name, description="Asterline synthetic evaluation dataset and results")
             client.create_examples(dataset_id=created.id, examples=examples[:1000], max_concurrency=3)
-        return f"LangSmith upload attempted for {dataset_name}."
+            return f"LangSmith upload attempted for {dataset_name} ({min(len(examples), 1000)} examples)."
+        return f"LangSmith upload skipped: no examples found for {dataset_name}."
     except Exception as error:
         return f"LangSmith upload skipped after non-fatal error: {error.__class__.__name__}."
 

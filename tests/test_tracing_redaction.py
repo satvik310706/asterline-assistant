@@ -3,6 +3,7 @@ import json
 import pytest
 
 from asterline_assistant import tracing
+from asterline_assistant.memory import redact_sensitive
 from asterline_assistant.models import ResearchResponse
 
 
@@ -94,3 +95,13 @@ def test_explicit_tracing_disable_wins_even_if_credentials_exist(monkeypatch) ->
     monkeypatch.setenv("LANGSMITH_API_KEY", "synthetic-test-value")
     monkeypatch.setenv("ASTERLINE_DISABLE_TRACING", "1")
     assert not tracing._enabled()
+
+
+def test_redact_sensitive_masks_secret_assignment_labels() -> None:
+    original = "GEMINI_API_KEY=synthetic-api-value token:synthetic-token password=synthetic-pass Authorization: Bearer synthetic-bearer"
+
+    redacted = redact_sensitive(original)
+
+    for secret in ("synthetic-api-value", "synthetic-token", "synthetic-pass", "synthetic-bearer"):
+        assert secret not in redacted
+    assert redacted.count("[REDACTED]") >= 4

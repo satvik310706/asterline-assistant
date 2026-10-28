@@ -56,3 +56,5 @@ PowerShell is the supported Windows entry point. `Makefile` contains equivalent 
 Every research citation must come from retrieved corpus chunks. Memory is per-user context, never company evidence. Secrets and sensitive personal data are redacted or rejected before storage, transcripts, caches, or traces. The corpus and evaluation datasets are hash-tested and never modified by the app.
 
 See [docs/DESIGN.md](docs/DESIGN.md), [docs/EVAL.md](docs/EVAL.md), [docs/FAILURE_LOG.md](docs/FAILURE_LOG.md), and [docs/DEMO.md](docs/DEMO.md).
+
+The assignment also requires accessible LangSmith runs. See [docs/TRACES.md](docs/TRACES.md) for safe synthetic-run setup, sharing steps, and the reviewer invite alternative. `export-traces` creates local illustrative exports and attempts best-effort dataset/report upload; it does not automatically create public trace URLs. Paste verified real shared URLs into `docs/TRACES.md` before submitting.

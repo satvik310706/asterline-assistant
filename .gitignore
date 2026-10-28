@@ -26,6 +26,7 @@ data/*.sqlite3*
 
 # Local test runs & evaluations (final reports remain in eval/final/)
 eval/results/
+/docs/trace_exports/
 
 # Scratch media, screenshots, and visual inspection artifacts
 *.png

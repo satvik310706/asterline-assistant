@@ -14,6 +14,11 @@ SENSITIVE_RE = re.compile(r"(?i)\b(health|medical|diagnosis|parental leave|pregn
 SK_RE = re.compile(r"(?i)\bsk-[A-Za-z0-9_-]+")
 BEARER_RE = re.compile(r"(?i)(authorization\s*:\s*bearer\s+|bearer\s+)[A-Za-z0-9._~+/=-]+")
 PASSWORD_RE = re.compile(r"(?i)(password\s*(?:is|=|:)\s*)[^\s,;]+")
+SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?i)(?P<label>\b(?:[A-Z0-9]+[_-])*(?:api[_ -]?key|token|password|secret)\b\s*[:=]\s*)"
+    r"(?!bearer\b)"
+    r"(?P<quote>[\"']?)[^\"'\s,;]+(?P=quote)"
+)
 FORGET_STOPWORDS = {
     "a", "about", "am", "an", "and", "are", "as", "do", "everything", "forget",
     "i", "im", "is", "it", "m", "me", "memory", "memories", "my", "of", "on", "one",
@@ -50,8 +55,9 @@ class Clock:
 
 
 def redact_sensitive(text: str) -> str:
-    text = SK_RE.sub("[REDACTED]", text)
     text = BEARER_RE.sub(lambda match: f"{match.group(1)}[REDACTED]", text)
+    text = SECRET_ASSIGNMENT_RE.sub(lambda match: f"{match.group('label')}[REDACTED]", text)
+    text = SK_RE.sub("[REDACTED]", text)
     text = PASSWORD_RE.sub(r"\1[REDACTED]", text)
     return SENSITIVE_RE.sub("[REDACTED]", text)
 

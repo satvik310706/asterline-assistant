@@ -1,9 +1,0 @@
-{
-  "name": "genuine-failure",
-  "user_id_hash": "synthetic-redacted",
-  "config": "improved",
-  "provider": "fake",
-  "degraded": true,
-  "outcome": "Provider unavailable; sources returned in degraded mode.",
-  "agent_tree": "router \u2192 retriever \u2192 answer_writer"
-}

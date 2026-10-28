@@ -41,7 +41,8 @@ def main() -> None:
     elif args.command == "export-traces":
         print(export_representative_traces(Path("docs/trace_exports")))
         print(export_langsmith_traces(Path("docs/trace_exports")) or "LangSmith live trace export skipped.")
-        print(maybe_upload(Path("eval/datasets/research.jsonl")))
+        report_path = Path("eval/final/improved_fake.json")
+        print(maybe_upload(Path("eval/datasets/research.jsonl"), report_path if report_path.exists() else None))
     elif args.command == "publish-results":
         for report in publish_results():
             print(report)
