@@ -53,3 +53,15 @@ def test_chitchat_skips_retrieval_and_llm(tmp_path: Path) -> None:
     assert response.model == "deterministic"
     assert provider.calls == 0
     assert [node for node, _ in events] == ["router", "answer_writer"]
+
+
+def test_role_and_corpus_inventory_question_uses_deterministic_route(tmp_path: Path) -> None:
+    provider = FakeLLM()
+    question = "hi, what is your role here? and how many chunks do you have"
+    response = run_improved_research(
+        question, "alice", OneChunkRetriever(), provider, MemoryStore(tmp_path / "memory.sqlite3"),
+    )
+    assert "research assistant" in response.answer.lower()
+    assert "1 chunk" in response.answer.lower()
+    assert response.provider == "rules"
+    assert provider.calls == 0

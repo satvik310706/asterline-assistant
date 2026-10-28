@@ -357,15 +357,22 @@ class ResilientLLM(LLMProvider):
                 primary_text = format_failure(self.primary.name, self.primary.model, primary_error, "primary")
                 draft.primary_error = primary_text
                 draft.error_class = primary_error.error_class
-                draft.trace_metadata = {"provider": self.name, "model": self.model, "attempts": primary_error.attempts + 1, "degraded": True, "error_class": primary_error.error_class, "status": primary_error.status_code, "quota_type": primary_error.quota_type, "retry_after": primary_error.retry_after, "primary_error": primary_text, "fallback_error": None}
+                draft.trace_metadata = {"provider": self.name, "model": self.model, "attempts": primary_error.attempts + 1, "degraded": True, "error_class": primary_error.error_class, "primary_error_class": primary_error.error_class, "primary_status": primary_error.status_code, "status": primary_error.status_code, "quota_type": primary_error.quota_type, "retry_after": primary_error.retry_after}
                 return draft
             except ProviderFailure as fallback_error:
                 self.calls = self.primary.calls + self.fallback.calls
                 self.name, self.model = "unavailable", self.fallback.model
-                message = "The language model is temporarily unavailable; here are the most relevant sources:"
+                if fallback_error.quality:
+                    message = "I couldn't provide a citation-verified answer, so I won't guess. Relevant retrieved sources:"
+                else:
+                    message = "The language model is temporarily unavailable. Relevant retrieved sources:"
+                if evidence.chunks:
+                    message += "\n" + "\n".join(f"- [{item.chunk.chunk_id} — {item.chunk.title}]" for item in evidence.chunks)
+                else:
+                    message += "\n- No relevant corpus sources were retrieved."
                 primary_text = format_failure(self.primary.name, self.primary.model, primary_error, "primary")
                 fallback_text = format_failure(self.fallback.name, self.fallback.model, fallback_error, "fallback")
-                return AnswerDraft(answer=message, degraded=True, provider_error=True, attempts=primary_error.attempts + fallback_error.attempts, error_class=primary_error.error_class, primary_error=primary_text, fallback_error=fallback_text, trace_metadata={"provider": "unavailable", "model": self.fallback.model, "attempts": primary_error.attempts + fallback_error.attempts, "degraded": True, "error_class": primary_error.error_class, "status": primary_error.status_code, "quota_type": primary_error.quota_type, "retry_after": primary_error.retry_after, "primary_error": primary_text, "fallback_error": fallback_text})
+                return AnswerDraft(answer=message, degraded=True, provider_error=True, attempts=primary_error.attempts + fallback_error.attempts, error_class=primary_error.error_class, primary_error=primary_text, fallback_error=fallback_text, trace_metadata={"provider": "unavailable", "model": self.fallback.model, "attempts": primary_error.attempts + fallback_error.attempts, "degraded": True, "error_class": primary_error.error_class, "status": primary_error.status_code, "quota_type": primary_error.quota_type, "retry_after": primary_error.retry_after, "fallback_error_class": fallback_error.error_class})
 
     def preflight(self, evidence: EvidencePack) -> None:
         try:

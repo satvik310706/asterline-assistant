@@ -71,11 +71,30 @@ def _intent(question: str, history: list[HistoryMessage]) -> str:
         return "forget"
     if re.match(r"^(list|show) (my )?memories|what do you remember", text):
         return "list"
+    if is_chitchat_question(text):
+        return "chitchat"
     if history and re.search(r"\b(it|that|those|what about|and|also)\b", text):
         return "followup"
-    if text in {"hi", "hello", "thanks", "thank you"}:
-        return "chitchat"
     return "question"
+
+
+def is_chitchat_question(question: str) -> bool:
+    text = question.strip().lower()
+    return bool(re.fullmatch(r"(?:hi|hello|hey|thanks|thank you)[.! ]*", text)) or is_assistant_or_corpus_meta_question(text)
+
+
+def is_assistant_or_corpus_meta_question(question: str) -> bool:
+    """Identify questions answerable from app identity and loaded corpus inventory."""
+    role = re.search(r"\b(who are you|your role|what can you do|your purpose|what do you do)\b", question, re.IGNORECASE)
+    inventory = re.search(
+        r"\bhow many\s+(?:knowledge[- ]base\s+)?(?:chunks|records|documents|docs)\b"
+        r"(?:(?!\b(?:support|mention|cover|cite)\b).){0,90}\b"
+        r"(?:do you have|are there|are in|does (?:the )?(?:corpus|knowledge base) have)\b"
+        r"|\bhow many\s+(?:chunks|records|documents|docs)\b.{0,60}\b(?:corpus|knowledge base)\b",
+        question,
+        re.IGNORECASE,
+    )
+    return bool(role or inventory)
 
 
 @traced("router")
@@ -113,8 +132,18 @@ def evidence_analyst_agent(state: GraphState) -> GraphState:
 @traced("answer_writer")
 def answer_writer_agent(state: GraphState) -> GraphState:
     if state["router"].intent == "chitchat":
+        question = state["question"].lower()
+        parts: list[str] = []
+        if re.search(r"\b(who are you|your role|what can you do|your purpose|what do you do)\b", question):
+            parts.append("I'm Asterline's research assistant. I answer company questions from the supplied knowledge base, cite supporting sources, and keep saved user context separate from evidence.")
+        if re.search(r"\bhow many\s+(?:knowledge[- ]base\s+)?(?:chunks|records|documents|docs)\b|\b(?:corpus|knowledge base)\s+(?:has|contains)\s+how many\b", question):
+            chunks = state["retriever"].chunks
+            unique_docs = {chunk.doc_id for chunk in chunks}
+            parts.append(f"The loaded knowledge base contains {len(chunks)} chunks across {len(unique_docs)} documents.")
+        if not parts:
+            parts.append("Hi! I can help with Asterline's plans, APIs, incidents, and policies. What would you like to know?")
         return {"response": ResearchResponse(
-            answer="Hi! I can help with Asterline's plans, APIs, incidents, and policies. What would you like to know?",
+            answer=" ".join(parts),
             evidence=[], provider="rules", model="deterministic",
         )}
     records = state["memory_reader"].records

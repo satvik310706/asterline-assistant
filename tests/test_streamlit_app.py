@@ -4,6 +4,7 @@ import sys
 from streamlit.testing.v1 import AppTest
 
 from asterline_assistant.memory import MemoryStore
+from asterline_assistant.models import ResearchResponse
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -40,6 +41,20 @@ def test_new_session_stays_selected_until_first_message(monkeypatch, tmp_path: P
     next(button for button in app.button if button.label == "New session").click().run(timeout=30)
     assert app.session_state["session_id"] != previous
     assert app.selectbox[3].value == app.session_state["session_id"]
+
+
+def test_provider_diagnostics_are_sanitized() -> None:
+    from app.streamlit_app import _safe_provider_diagnostics
+
+    response = ResearchResponse(
+        answer="", evidence=[], provider="unavailable", model="llama3.2:3b",
+        error_class="ClientError", error_status=429, quota_type="quota",
+        primary_error="raw reply: secret primary body",
+        fallback_error="fallback: ollama/model failed: MissingCitation raw reply: secret fallback body",
+    )
+    details = _safe_provider_diagnostics(response)
+    assert "HTTP 429" in details and "quota" in details and "MissingCitation" in details
+    assert "secret" not in details and "raw reply" not in details
 
 
 def test_streamlit_chat_remember_and_user_isolation(monkeypatch, tmp_path: Path) -> None:
@@ -96,3 +111,17 @@ def test_streamlit_improved_greeting_uses_short_chitchat_path(monkeypatch, tmp_p
     assert "rules/deterministic" in rendered
     assert "on-call runbook" not in rendered
     assert any("Agents complete" in str(widget.label) for widget in app.status)
+
+
+def test_streamlit_role_and_chunk_count_is_fast_and_grounded_in_inventory(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("ASTERLINE_SQLITE_PATH", str(tmp_path / "meta-question.sqlite3"))
+    monkeypatch.setenv("ASTERLINE_CONFIG", "improved")
+    app = AppTest.from_file(ROOT / "app" / "streamlit_app.py").run(timeout=30)
+    app.chat_input[0].set_value("hi, what is your role here? and how many chunks do you have")
+    app.run(timeout=60)
+    assert not app.exception
+    rendered = " ".join(str(widget.value) for widget in [*app.markdown, *app.caption])
+    assert "research assistant" in rendered.lower()
+    assert "75 chunks across 25 documents" in rendered
+    assert "rules/deterministic" in rendered

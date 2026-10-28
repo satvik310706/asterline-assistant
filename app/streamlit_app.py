@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 import uuid
@@ -17,7 +18,7 @@ if str(ROOT / "src") not in sys.path:
 
 from asterline_assistant.config import Settings
 from asterline_assistant.corpus import load_corpus, validate_corpus_integrity
-from asterline_assistant.graph import run_improved_research
+from asterline_assistant.graph import is_chitchat_question, run_improved_research
 from asterline_assistant.llm import make_provider
 from asterline_assistant.memory import MemoryStore
 from asterline_assistant.research import run_research
@@ -46,6 +47,26 @@ def export_memories(store: MemoryStore, user_id: str) -> str:
 
 def _store() -> MemoryStore:
     return MemoryStore(Settings.from_environment().sqlite_path)
+
+
+@st.cache_resource(show_spinner=False)
+def _retriever(corpus_file: str, chroma_dir: str, embedding_cache: str) -> HybridRetriever:
+    corpus_path = Path(corpus_file)
+    validate_corpus_integrity(corpus_path)
+    return HybridRetriever(load_corpus(corpus_path), Path(chroma_dir), Path(embedding_cache))
+
+
+def _safe_provider_diagnostics(response) -> str:
+    """Expose classes and status only; never render raw model or SDK text."""
+    primary = response.error_class or "provider failure"
+    status = f"HTTP {response.error_status}" if response.error_status is not None else "status unavailable"
+    quota = f", {response.quota_type} quota" if response.quota_type else ""
+    details = [f"Gemini: {primary} ({status}{quota})"]
+    if response.fallback_error:
+        match = re.search(r"failed:\s*([A-Za-z][A-Za-z0-9_]*)", response.fallback_error)
+        if match:
+            details.append(f"Ollama: {match.group(1)}")
+    return " · ".join(details)
 
 
 def _new_session() -> None:
@@ -161,8 +182,7 @@ def main() -> None:
                     if agent in timeline:
                         timeline[agent].write(f"{'◉' if index == 0 else '○'} {agent} · {'running' if index == 0 else 'pending'}")
                 started = time.perf_counter()
-                validate_corpus_integrity(settings.corpus_path)
-                retriever = HybridRetriever(load_corpus(settings.corpus_path), settings.chroma_path, settings.fastembed_cache_path)
+                retriever = _retriever(str(settings.corpus_path), str(settings.chroma_path), str(settings.fastembed_cache_path))
                 provider = make_provider(provider_name, settings.gemini_model, settings.ollama_model)
                 provider_progress = st.empty()
                 provider.status_callback = lambda message: provider_progress.caption(message)
@@ -173,6 +193,7 @@ def main() -> None:
                 if config == "improved":
                     def on_agent_step(agent: str, elapsed: float) -> None:
                         chitchat = question.strip().lower() in {"hi", "hello", "thanks", "thank you"}
+                        chitchat = chitchat or is_chitchat_question(question)
                         path = ["router", "answer_writer"] if chitchat else agents
                         agent_index = path.index(agent)
                         for index, name in enumerate(path):
@@ -192,7 +213,12 @@ def main() -> None:
                     response = fn(question, st.session_state.user, retriever, provider, store, history=history_models)
                 elapsed = time.perf_counter() - started
                 st.caption(f"agent graph completed in {elapsed:.2f}s")
-                activity.update(label="Agents complete", state="complete", expanded=False)
+                if response.provider_error:
+                    activity.update(label="Sources only · answer not verified", state="complete", expanded=False)
+                elif response.degraded:
+                    activity.update(label="Completed · local fallback", state="complete", expanded=False)
+                else:
+                    activity.update(label="Agents complete", state="complete", expanded=False)
         except Exception as error:
             response = None
             st.error(f"The turn could not be completed cleanly ({error.__class__.__name__}). Try FakeLLM or retry later.")
@@ -202,12 +228,15 @@ def main() -> None:
         with st.chat_message("assistant", avatar="🔎"):
             st.markdown(response.answer)
             st.caption(f"{response.provider}/{response.model}" + (" · degraded" if response.degraded else ""))
-            if response.degraded:
-                st.warning("Degraded mode: Gemini was unavailable; this answer came from the local fallback. Verify the cited evidence below.")
+            if response.provider_error:
+                st.warning("Source-only result · no model-generated answer passed citation checks.")
+                with st.expander("Provider diagnostics · sanitized"):
+                    st.caption(_safe_provider_diagnostics(response))
+            elif response.degraded:
+                st.warning("Degraded mode · this answer came from the local fallback. Check the cited evidence below.")
                 if response.primary_error:
-                    st.caption(response.primary_error)
-                if response.fallback_error:
-                    st.caption(response.fallback_error)
+                    with st.expander("Provider diagnostics · sanitized"):
+                        st.caption(_safe_provider_diagnostics(response))
             with st.expander("Evidence & citations"):
                 for item in response.evidence:
                     st.write(f"`{item.chunk.chunk_id}` — {item.chunk.title} · {item.chunk.published} · v{item.chunk.version}")

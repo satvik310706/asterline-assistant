@@ -152,6 +152,22 @@ def test_resilient_provider_reports_live_gemini_retry_status() -> None:
     assert any("retrying in" in item for item in messages)
 
 
+def test_bad_fallback_reply_returns_cited_sources_not_raw_diagnostics() -> None:
+    chunk = load_corpus(ROOT / "data/corpus.jsonl")[0]
+    primary = GeminiLLM("test", max_attempts=1)
+    primary.client = FakeGeminiClient([FakeAPIError(429)])
+    fallback = OllamaLLM(
+        "llama3.2:3b",
+        request_fn=lambda _: "I am a conversational AI designed to provide information and answer questions based on evidence.",
+    )
+    pack = EvidencePack(query="q", chunks=[{"chunk": chunk}])
+    result = ResilientLLM(primary, fallback).answer("q", pack)
+    assert "citation-verified answer" in result.answer
+    assert f"[{chunk.chunk_id} — {chunk.title}]" in result.answer
+    assert "conversational AI" not in result.answer
+    assert "MissingCitation" not in result.answer
+
+
 def test_gemini_honors_retry_after() -> None:
     sleeps: list[float] = []
     provider = GeminiLLM("test", sleep_fn=sleeps.append, random_fn=lambda: 0.0)
@@ -211,7 +227,7 @@ def test_resilient_provider_falls_back_and_marks_degraded() -> None:
 def test_double_outage_returns_clean_message_without_traceback() -> None:
     result = ResilientLLM(failing_gemini(), StubFallback(failure=True)).answer("q", EvidencePack(query="q", chunks=[]))
     assert result.provider_error is True
-    assert result.answer.startswith("The language model is temporarily unavailable;")
+    assert result.answer.startswith("The language model is temporarily unavailable.")
     assert "Traceback" not in result.answer
     assert result.primary_error and "primary: gemini/test failed" in result.primary_error
     assert result.fallback_error and "fallback: ollama/llama3.2:3b failed" in result.fallback_error

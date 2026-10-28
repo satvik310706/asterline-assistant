@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import json
 import hashlib
+import re
 from functools import wraps
 from collections.abc import Callable
 from typing import Any, TypeVar
@@ -37,6 +38,19 @@ def _trace_output(value: Any) -> Any:
     if hasattr(value, "model_dump"):
         output = value.model_dump(mode="json")
         metadata = output.pop("trace_metadata", {})
+        # Error payloads can contain SDK bodies or model replies. Keep only
+        # class/status identifiers in traces; full details stay out of LangSmith.
+        primary_error = output.pop("primary_error", None)
+        fallback_error = output.pop("fallback_error", None)
+        metadata.pop("primary_error", None)
+        if primary_error or output.get("error_class"):
+            metadata.setdefault("primary_error_class", output.get("error_class"))
+            metadata.setdefault("primary_status", output.get("error_status"))
+        metadata.pop("fallback_error", None)
+        if fallback_error and "fallback_error_class" not in metadata:
+            match = re.search(r"failed:\s*([A-Za-z][A-Za-z0-9_]*)", fallback_error)
+            if match:
+                metadata["fallback_error_class"] = match.group(1)
         return {"output": output, "metadata": metadata}
     return value
 
