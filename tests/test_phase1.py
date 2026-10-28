@@ -55,6 +55,20 @@ def test_memory_filters_secret_and_sensitive_claims(tmp_path: Path) -> None:
     assert store.write_explicit("alice", "my medical diagnosis is private") is None
 
 
+def test_memory_forget_correction_and_hard_isolation(tmp_path: Path) -> None:
+    store = MemoryStore(tmp_path / "memory.sqlite3")
+    assert store.write_explicit("alice", "uses Team") is not None
+    assert store.write_explicit("alice", "investigating exports") is not None
+    corrected = store.correct("alice", "uses Team", "uses Enterprise")
+    assert corrected and corrected.content == "uses Enterprise"
+    assert [item.content for item in store.list_active("alice")] == ["investigating exports", "uses Enterprise"]
+    assert store.list_active("bob") == []
+    assert store.forget("alice", "exports") == 1
+    assert all("exports" not in item.content for item in store.list_active("alice"))
+    assert store.forget_all("alice") == 2
+    assert store.list_active("alice") == []
+
+
 def test_hybrid_retrieval_uses_one_entry_per_chunk(tmp_path: Path) -> None:
     chunks = load_corpus(ROOT / "data/corpus.jsonl")
     retriever = HybridRetriever(chunks, tmp_path / "chroma")
