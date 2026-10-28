@@ -3,13 +3,13 @@
 << /Type /Catalog /Pages 2 0 R >>
 endobj
 2 0 obj
-<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>
+<< /Type /Pages /Kids [3 0 R 5 0 R 7 0 R 9 0 R] /Count 4 >>
 endobj
 3 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 4 0 R >>
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 11 0 R >> >> /Contents 4 0 R >>
 endobj
 4 0 obj
-<< /Length 2745 >>
+<< /Length 2489 >>
 stream
 BT
 /F1 9 Tf
@@ -18,7 +18,7 @@ BT
 0 -15 Td
 () Tj
 0 -15 Td
-(Repository: [PASTEREPOSITORYURLHERE]) Tj
+(Repository: https://github.com/satvik310706/asterline-assistant) Tj
 0 -15 Td
 (LangSmith traces: [PASTESHAREDTRACELINKSHERE]) Tj
 0 -15 Td
@@ -50,6 +50,10 @@ BT
 0 -15 Td
 (baselinefake.json: provider=fake config=baseline cases=80) Tj
 0 -15 Td
+(  model: deterministic) Tj
+0 -15 Td
+(  fallback disabled: True) Tj
+0 -15 Td
 (  retrievalrecallat5: 0.9743589743589743 \(78/80 applicable\)) Tj
 0 -15 Td
 (  mrr: 0.7653846153846156 \(78/80 applicable\)) Tj
@@ -66,29 +70,195 @@ BT
 0 -15 Td
 (  abstentionaccuracy: 0.9125 \(80/80 applicable\)) Tj
 0 -15 Td
+(  providererrorcount: 0) Tj
+0 -15 Td
+(  evalerrorcount: 0) Tj
+0 -15 Td
+(  llmcallsperquestion: 1.0) Tj
+0 -15 Td
 (  fallbackfraction: 0.0 \(80/80 applicable\)) Tj
 0 -15 Td
-(improvedfake.json: provider=fake config=improved cases=80) Tj
+(baselinegemini.json: provider=gemini config=baseline cases=80) Tj
+0 -15 Td
+(  model: gemini-3.5-flash) Tj
+0 -15 Td
+(  fallback disabled: True) Tj
+0 -15 Td
+(  retrievalrecallat5: 0.95 \(80/80 applicable\)) Tj
+0 -15 Td
+(  mrr: 0.8425925925925927 \(18/80 applicable\)) Tj
+0 -15 Td
+(  factaccuracy: 1.0 \(18/80 applicable\)) Tj
+0 -15 Td
+(  citationvalidity: 1.0 \(18/80 applicable\)) Tj
+0 -15 Td
+(  citationprecision: 0.9074074074074073 \(18/80 applicable\)) Tj
+0 -15 Td
+(  citationrecall: 1.0 \(18/80 applicable\)) Tj
+0 -15 Td
+(  conflicthandling: 0.0 \(0/80 applicable\)) Tj
+0 -15 Td
+(  abstentionaccuracy: 1.0 \(18/80 applicable\)) Tj
+0 -15 Td
+(  providererrorcount: 62) Tj
+0 -15 Td
+(  evalerrorcount: 0) Tj
+0 -15 Td
+(  llmcallsperquestion: 1.5625) Tj
+0 -15 Td
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 11 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 2660 >>
+stream
+BT
+/F1 9 Tf
+45 760 Td
+(  fallbackfraction: 0.0 \(18/80 applicable\)) Tj
+0 -15 Td
+(baselineollama.json: provider=ollama config=baseline cases=80) Tj
+0 -15 Td
+(  model: llama3.2:3b) Tj
+0 -15 Td
+(  fallback disabled: True) Tj
 0 -15 Td
 (  retrievalrecallat5: 0.9743589743589743 \(78/80 applicable\)) Tj
 0 -15 Td
-(  mrr: 0.758974358974359 \(78/80 applicable\)) Tj
+(  mrr: 0.7653846153846156 \(78/80 applicable\)) Tj
 0 -15 Td
-(  factaccuracy: 0.7 \(80/80 applicable\)) Tj
+(  factaccuracy: 0.4625 \(80/80 applicable\)) Tj
 0 -15 Td
 (  citationvalidity: 1.0 \(80/80 applicable\)) Tj
 0 -15 Td
-(  citationprecision: 0.5833333333333334 \(78/80 applicable\)) Tj
+(  citationprecision: 0.6132478632478632 \(78/80 applicable\)) Tj
 0 -15 Td
-(  citationrecall: 0.7756410256410257 \(78/80 applicable\)) Tj
+(  citationrecall: 0.46794871794871806 \(78/80 applicable\)) Tj
 0 -15 Td
-(  conflicthandling: 0.42857142857142855 \(7/80 applicable\)) Tj
+(  conflicthandling: 0.5714285714285714 \(7/80 applicable\)) Tj
+0 -15 Td
+(  abstentionaccuracy: 0.7875 \(80/80 applicable\)) Tj
+0 -15 Td
+(  providererrorcount: 0) Tj
+0 -15 Td
+(  evalerrorcount: 0) Tj
+0 -15 Td
+(  llmcallsperquestion: 1.3875) Tj
+0 -15 Td
+(  fallbackfraction: 0.0 \(74/80 applicable\)) Tj
+0 -15 Td
+(improvedfake.json: provider=fake config=improved cases=80) Tj
+0 -15 Td
+(  model: deterministic) Tj
+0 -15 Td
+(  fallback disabled: True) Tj
+0 -15 Td
+(  retrievalrecallat5: 0.9358974358974359 \(78/80 applicable\)) Tj
+0 -15 Td
+(  mrr: 0.7049145299145301 \(78/80 applicable\)) Tj
+0 -15 Td
+(  factaccuracy: 0.775 \(80/80 applicable\)) Tj
+0 -15 Td
+(  citationvalidity: 0.975 \(80/80 applicable\)) Tj
+0 -15 Td
+(  citationprecision: 0.6217948717948718 \(78/80 applicable\)) Tj
+0 -15 Td
+(  citationrecall: 0.7713675213675213 \(78/80 applicable\)) Tj
+0 -15 Td
+(  conflicthandling: 1.0 \(7/80 applicable\)) Tj
 0 -15 Td
 (  abstentionaccuracy: 0.9125 \(80/80 applicable\)) Tj
 0 -15 Td
+(  providererrorcount: 0) Tj
+0 -15 Td
+(  evalerrorcount: 0) Tj
+0 -15 Td
+(  llmcallsperquestion: 0.6875) Tj
+0 -15 Td
 (  fallbackfraction: 0.0 \(80/80 applicable\)) Tj
 0 -15 Td
-(memoryfake.json: provider=fake config=None cases=None) Tj
+(improvedollama.json: provider=ollama config=improved cases=80) Tj
+0 -15 Td
+(  model: llama3.2:3b) Tj
+0 -15 Td
+(  fallback disabled: True) Tj
+0 -15 Td
+(  retrievalrecallat5: 0.9487179487179487 \(78/80 applicable\)) Tj
+0 -15 Td
+(  mrr: 0.7017094017094019 \(78/80 applicable\)) Tj
+0 -15 Td
+(  factaccuracy: 0.55 \(80/80 applicable\)) Tj
+0 -15 Td
+(  citationvalidity: 0.975 \(80/80 applicable\)) Tj
+0 -15 Td
+(  citationprecision: 0.6089743589743589 \(78/80 applicable\)) Tj
+0 -15 Td
+(  citationrecall: 0.5299145299145299 \(78/80 applicable\)) Tj
+0 -15 Td
+(  conflicthandling: 0.8571428571428571 \(7/80 applicable\)) Tj
+0 -15 Td
+(  abstentionaccuracy: 0.8125 \(80/80 applicable\)) Tj
+0 -15 Td
+(  providererrorcount: 0) Tj
+0 -15 Td
+(  evalerrorcount: 0) Tj
+0 -15 Td
+(  llmcallsperquestion: 1.2875) Tj
+0 -15 Td
+(  fallbackfraction: 0.0 \(71/80 applicable\)) Tj
+0 -15 Td
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 11 0 R >> >> /Contents 8 0 R >>
+endobj
+8 0 obj
+<< /Length 2630 >>
+stream
+BT
+/F1 9 Tf
+45 760 Td
+(memoryfake.json: provider=fake scenarios=34 passed=34/34) Tj
+0 -15 Td
+(  memorywriteprecision: 1.0 \(aggregate over 34 scenarios\)) Tj
+0 -15 Td
+(  memorywriterecall: 1.0 \(aggregate over 34 scenarios\)) Tj
+0 -15 Td
+(  forgetsuccess: 1.0 \(aggregate over 34 scenarios\)) Tj
+0 -15 Td
+(  isolationleakage: 0 \(aggregate over 34 scenarios\)) Tj
+0 -15 Td
+(  secretleakcount: 0 \(aggregate over 34 scenarios\)) Tj
+0 -15 Td
+(  sensitivestoredcount: 0 \(aggregate over 34 scenarios\)) Tj
+0 -15 Td
+(  correction-company pass rate: 1.0) Tj
+0 -15 Td
+(  correction-self pass rate: 1.0) Tj
+0 -15 Td
+(  forget pass rate: 1.0) Tj
+0 -15 Td
+(  injection pass rate: 1.0) Tj
+0 -15 Td
+(  isolation pass rate: 1.0) Tj
+0 -15 Td
+(  list-memory pass rate: 1.0) Tj
+0 -15 Td
+(  memory-not-evidence pass rate: 1.0) Tj
+0 -15 Td
+(  persistence pass rate: 1.0) Tj
+0 -15 Td
+(  preference pass rate: 1.0) Tj
+0 -15 Td
+(  secret pass rate: 1.0) Tj
+0 -15 Td
+(  sensitive pass rate: 1.0) Tj
+0 -15 Td
+(  stale-confirmation pass rate: 1.0) Tj
 0 -15 Td
 () Tj
 0 -15 Td
@@ -106,18 +276,6 @@ BT
 0 -15 Td
 (## Provider resilience smoke) Tj
 0 -15 Td
-ET
-endstream
-endobj
-5 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 6 0 R >>
-endobj
-6 0 obj
-<< /Length 2113 >>
-stream
-BT
-/F1 9 Tf
-45 760 Td
 (A real Gemini request returned HTTP 429 \(quota exhausted\); the app recorded the) Tj
 0 -15 Td
 (sanitized primary error and successfully served the answer through the locally) Tj
@@ -156,6 +314,18 @@ BT
 0 -15 Td
 () Tj
 0 -15 Td
+ET
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 11 0 R >> >> /Contents 10 0 R >>
+endobj
+10 0 obj
+<< /Length 1022 >>
+stream
+BT
+/F1 9 Tf
+45 760 Td
 (Add any additional tools, prompts, or review details here before submission.) Tj
 0 -15 Td
 () Tj
@@ -203,21 +373,25 @@ BT
 ET
 endstream
 endobj
-7 0 obj
+11 0 obj
 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
 endobj
 xref
-0 8
+0 12
 0000000000 65535 f 
 0000000009 00000 n 
 0000000058 00000 n 
-0000000121 00000 n 
-0000000247 00000 n 
-0000003044 00000 n 
-0000003170 00000 n 
-0000005335 00000 n 
+0000000133 00000 n 
+0000000260 00000 n 
+0000002801 00000 n 
+0000002928 00000 n 
+0000005640 00000 n 
+0000005767 00000 n 
+0000008449 00000 n 
+0000008577 00000 n 
+0000009652 00000 n 
 trailer
-<< /Size 8 /Root 1 0 R >>
+<< /Size 12 /Root 1 0 R >>
 startxref
-5405
+9723
 %%EOF

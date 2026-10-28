@@ -14,6 +14,28 @@ SENSITIVE_RE = re.compile(r"(?i)\b(health|medical|diagnosis|parental leave|pregn
 SK_RE = re.compile(r"(?i)\bsk-[A-Za-z0-9_-]+")
 BEARER_RE = re.compile(r"(?i)(authorization\s*:\s*bearer\s+|bearer\s+)[A-Za-z0-9._~+/=-]+")
 PASSWORD_RE = re.compile(r"(?i)(password\s*(?:is|=|:)\s*)[^\s,;]+")
+FORGET_STOPWORDS = {
+    "a", "about", "am", "an", "and", "are", "as", "do", "everything", "forget",
+    "i", "im", "is", "it", "m", "me", "memory", "memories", "my", "of", "on", "one",
+    "our", "please", "saved", "that", "the", "this", "to", "you", "your",
+}
+
+
+def _forget_terms(text: str) -> set[str]:
+    """Normalize everyday wording without letting vague targets delete multiple memories."""
+    terms = set()
+    for word in re.findall(r"[a-z0-9]+", text.casefold()):
+        if word in FORGET_STOPWORDS:
+            continue
+        if len(word) > 5 and word.endswith("ies"):
+            word = word[:-3] + "y"
+        elif len(word) > 4 and word.endswith("s"):
+            word = word[:-1]
+        if len(word) > 7 and word.endswith("ing"):
+            word = word[:-3]
+        # A short common prefix aligns forms such as investigation/investigating.
+        terms.add(word[:8] if len(word) >= 8 else word)
+    return terms
 
 
 class Clock:
@@ -41,7 +63,11 @@ def contains_sensitive(text: str) -> bool:
 class MemoryStore:
     def __init__(self, path: Path, clock: Clock | None = None) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        self.connection = sqlite3.connect(path)
+        # check_same_thread=False + WAL mode allows concurrent Streamlit sessions.
+        self.connection = sqlite3.connect(path, check_same_thread=False)
+        self.connection.execute("PRAGMA journal_mode=WAL")
+        self.connection.execute("PRAGMA synchronous=NORMAL")
+        self.connection.execute("PRAGMA busy_timeout=5000")
         self.connection.row_factory = sqlite3.Row
         self.clock = clock or Clock()
         self.connection.execute("CREATE TABLE IF NOT EXISTS memories (id INTEGER PRIMARY KEY, user_id TEXT NOT NULL, type TEXT NOT NULL, content TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, last_confirmed_at TEXT NOT NULL, source_session TEXT, source_turn TEXT, confidence REAL, is_authoritative INTEGER NOT NULL)")
@@ -69,14 +95,38 @@ class MemoryStore:
         self.connection.commit()
         return MemoryRecord(id=record.lastrowid, user_id=user_id, type=record_type, content=content, created_at=now, updated_at=now, last_confirmed_at=now, source_session=session, source_turn=turn, is_authoritative=False)
 
-    def forget(self, user_id: str, target: str) -> int:
-        """Hard-delete matching memories so forgotten content cannot resurface."""
-        rows = self.connection.execute("SELECT id FROM memories WHERE user_id = ? AND status = 'active' AND lower(content) LIKE ?", (user_id, f"%{target.lower()}%" )).fetchall()
-        if rows:
-            self.connection.executemany("DELETE FROM memory_vectors WHERE user_id = ? AND memory_id = ?", ((user_id, row["id"]) for row in rows))
-            self.connection.executemany("DELETE FROM memories WHERE user_id = ? AND id = ?", ((user_id, row["id"]) for row in rows))
+    def find_forget_matches(self, user_id: str, target: str) -> list[MemoryRecord]:
+        """Resolve a natural-language forget target against this user's active records."""
+        wanted = _forget_terms(target)
+        if not wanted:
+            return []
+        records = self.list_active(user_id)
+        return [record for record in records if wanted.issubset(_forget_terms(record.content))]
+
+    def forget_records(self, user_id: str, memory_ids: list[int]) -> int:
+        """Hard-delete explicit record IDs and their vectors, scoped to one user."""
+        if not memory_ids:
+            return 0
+        placeholders = ",".join("?" for _ in memory_ids)
+        params = (user_id, *memory_ids)
+        rows = self.connection.execute(
+            f"SELECT id FROM memories WHERE user_id = ? AND status = 'active' AND id IN ({placeholders})", params,
+        ).fetchall()
+        ids = [int(row["id"]) for row in rows]
+        if ids:
+            id_placeholders = ",".join("?" for _ in ids)
+            scoped_params = (user_id, *ids)
+            self.connection.execute(f"DELETE FROM memory_vectors WHERE user_id = ? AND memory_id IN ({id_placeholders})", scoped_params)
+            self.connection.execute(f"DELETE FROM memories WHERE user_id = ? AND id IN ({id_placeholders})", scoped_params)
             self.connection.commit()
-        return len(rows)
+        return len(ids)
+
+    def forget(self, user_id: str, target: str) -> int:
+        """Hard-delete one unambiguous match; ambiguous targets delete nothing."""
+        matches = self.find_forget_matches(user_id, target)
+        if len(matches) != 1 or matches[0].id is None:
+            return 0
+        return self.forget_records(user_id, [matches[0].id])
 
     def forget_all(self, user_id: str) -> int:
         result = self.connection.execute("DELETE FROM memories WHERE user_id = ?", (user_id,))

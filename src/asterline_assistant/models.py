@@ -39,6 +39,7 @@ class EvidencePack(BaseModel):
 class AnswerDraft(BaseModel):
     answer: str
     cited_chunk_ids: list[str] = Field(default_factory=list)
+    calculated_values: list[str] = Field(default_factory=list)
     abstained: bool = False
     provider_error: bool = False
     degraded: bool = False
@@ -55,6 +56,7 @@ class AnswerDraft(BaseModel):
 class ResearchResponse(BaseModel):
     answer: str
     evidence: list[RetrievedChunk]
+    calculated_values: list[str] = Field(default_factory=list)
     memory_used: list[str] = Field(default_factory=list)
     memory_written: list[str] = Field(default_factory=list)
     abstained: bool = False

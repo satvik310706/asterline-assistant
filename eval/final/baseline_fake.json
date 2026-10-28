@@ -48,7 +48,7 @@
     },
     "provider_error_count": 0,
     "eval_error_count": 0,
-    "llm_calls_per_question": 0.0,
+    "llm_calls_per_question": 1.0,
     "fallback_fraction": {
       "value": 0.0,
       "applicable": 80,
@@ -699,6 +699,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -711,8 +714,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 373.7687000029837,
-      "llm_calls": 0
+      "latency_ms": 64.67889998748433,
+      "llm_calls": 1
     },
     {
       "id": "S02",
@@ -747,6 +750,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -759,8 +765,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 368.163099999947,
-      "llm_calls": 0
+      "latency_ms": 21.521800008486025,
+      "llm_calls": 1
     },
     {
       "id": "S03",
@@ -795,6 +801,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -807,8 +816,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 434.97429999843007,
-      "llm_calls": 0
+      "latency_ms": 27.917499988689087,
+      "llm_calls": 1
     },
     {
       "id": "S04",
@@ -843,6 +852,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -855,8 +867,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 352.3695999974734,
-      "llm_calls": 0
+      "latency_ms": 45.058500007144175,
+      "llm_calls": 1
     },
     {
       "id": "S05",
@@ -891,6 +903,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -903,8 +918,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 704.1682999988552,
-      "llm_calls": 0
+      "latency_ms": 26.57060000638012,
+      "llm_calls": 1
     },
     {
       "id": "S06",
@@ -939,6 +954,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -951,8 +969,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 288.19579999981215,
-      "llm_calls": 0
+      "latency_ms": 24.6257999970112,
+      "llm_calls": 1
     },
     {
       "id": "S07",
@@ -987,6 +1005,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -999,8 +1020,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 160.95680000580614,
-      "llm_calls": 0
+      "latency_ms": 20.388100005220622,
+      "llm_calls": 1
     },
     {
       "id": "S08",
@@ -1035,6 +1056,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -1047,8 +1071,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 251.00219999876572,
-      "llm_calls": 0
+      "latency_ms": 20.314400011557154,
+      "llm_calls": 1
     },
     {
       "id": "S09",
@@ -1083,6 +1107,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -1095,8 +1122,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 141.68840000638738,
-      "llm_calls": 0
+      "latency_ms": 20.096899999771267,
+      "llm_calls": 1
     },
     {
       "id": "S10",
@@ -1131,6 +1158,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -1143,8 +1173,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 168.29039999720408,
-      "llm_calls": 0
+      "latency_ms": 21.571599994786084,
+      "llm_calls": 1
     },
     {
       "id": "S11",
@@ -1179,6 +1209,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -1191,8 +1224,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 128.4425999983796,
-      "llm_calls": 0
+      "latency_ms": 95.5822999967495,
+      "llm_calls": 1
     },
     {
       "id": "S12",
@@ -1227,6 +1260,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -1239,8 +1275,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 52.723799999512266,
-      "llm_calls": 0
+      "latency_ms": 36.666200001491234,
+      "llm_calls": 1
     },
     {
       "id": "S13",
@@ -1275,6 +1311,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -1287,8 +1326,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 81.1321000001044,
-      "llm_calls": 0
+      "latency_ms": 25.69260000018403,
+      "llm_calls": 1
     },
     {
       "id": "S14",
@@ -1323,6 +1362,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -1335,8 +1377,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 93.45960000064224,
-      "llm_calls": 0
+      "latency_ms": 17.850799995358102,
+      "llm_calls": 1
     },
     {
       "id": "M01",
@@ -1371,6 +1413,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -1383,8 +1428,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 86.55580000049667,
-      "llm_calls": 0
+      "latency_ms": 20.38830000674352,
+      "llm_calls": 1
     },
     {
       "id": "M02",
@@ -1419,6 +1464,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -1431,8 +1479,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 149.47640000173124,
-      "llm_calls": 0
+      "latency_ms": 22.655599997960962,
+      "llm_calls": 1
     },
     {
       "id": "M03",
@@ -1467,6 +1515,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -1479,8 +1530,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 130.87629999790806,
-      "llm_calls": 0
+      "latency_ms": 61.02639999880921,
+      "llm_calls": 1
     },
     {
       "id": "M04",
@@ -1515,6 +1566,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -1527,8 +1581,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 112.58770000131335,
-      "llm_calls": 0
+      "latency_ms": 23.832700011553243,
+      "llm_calls": 1
     },
     {
       "id": "M05",
@@ -1563,6 +1617,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -1575,8 +1632,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 187.31680000200868,
-      "llm_calls": 0
+      "latency_ms": 38.356400007614866,
+      "llm_calls": 1
     },
     {
       "id": "M06",
@@ -1611,6 +1668,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -1623,8 +1683,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 113.39589999988675,
-      "llm_calls": 0
+      "latency_ms": 22.402800008421764,
+      "llm_calls": 1
     },
     {
       "id": "M07",
@@ -1659,6 +1719,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -1671,8 +1734,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 101.7301000028965,
-      "llm_calls": 0
+      "latency_ms": 18.36139999795705,
+      "llm_calls": 1
     },
     {
       "id": "C01",
@@ -1707,6 +1770,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -1719,8 +1785,8 @@
         "conflict_handling": 1.0,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 127.12520000059158,
-      "llm_calls": 0
+      "latency_ms": 21.803499999805354,
+      "llm_calls": 1
     },
     {
       "id": "C02",
@@ -1755,6 +1821,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -1767,8 +1836,8 @@
         "conflict_handling": 0.0,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 138.8239000007161,
-      "llm_calls": 0
+      "latency_ms": 19.75289999973029,
+      "llm_calls": 1
     },
     {
       "id": "C03",
@@ -1803,6 +1872,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -1815,8 +1887,8 @@
         "conflict_handling": 0.0,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 79.69549999688752,
-      "llm_calls": 0
+      "latency_ms": 17.327699999441393,
+      "llm_calls": 1
     },
     {
       "id": "C04",
@@ -1851,6 +1923,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -1863,8 +1938,8 @@
         "conflict_handling": 0.0,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 97.75939999963157,
-      "llm_calls": 0
+      "latency_ms": 75.7368999911705,
+      "llm_calls": 1
     },
     {
       "id": "C05",
@@ -1899,6 +1974,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -1911,8 +1989,8 @@
         "conflict_handling": 1.0,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 207.7620999989449,
-      "llm_calls": 0
+      "latency_ms": 18.890800012741238,
+      "llm_calls": 1
     },
     {
       "id": "C06",
@@ -1947,6 +2025,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -1959,8 +2040,8 @@
         "conflict_handling": 1.0,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 103.32979999657255,
-      "llm_calls": 0
+      "latency_ms": 21.384499996202067,
+      "llm_calls": 1
     },
     {
       "id": "C07",
@@ -1995,6 +2076,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2007,8 +2091,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 143.611300001794,
-      "llm_calls": 0
+      "latency_ms": 26.804299996001646,
+      "llm_calls": 1
     },
     {
       "id": "C08",
@@ -2043,6 +2127,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2055,8 +2142,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 191.13150000339374,
-      "llm_calls": 0
+      "latency_ms": 1090.6688000104623,
+      "llm_calls": 1
     },
     {
       "id": "T01",
@@ -2091,6 +2178,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2103,8 +2193,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 98.72259999974631,
-      "llm_calls": 0
+      "latency_ms": 35.57149998960085,
+      "llm_calls": 1
     },
     {
       "id": "T02",
@@ -2139,6 +2229,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2151,8 +2244,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 215.7322999992175,
-      "llm_calls": 0
+      "latency_ms": 73.68439999117982,
+      "llm_calls": 1
     },
     {
       "id": "T03",
@@ -2187,6 +2280,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2199,8 +2295,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 143.4443000034662,
-      "llm_calls": 0
+      "latency_ms": 19.286499998997897,
+      "llm_calls": 1
     },
     {
       "id": "T04",
@@ -2235,6 +2331,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2247,8 +2346,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 66.6168000025209,
-      "llm_calls": 0
+      "latency_ms": 196.74810000287835,
+      "llm_calls": 1
     },
     {
       "id": "T05",
@@ -2283,6 +2382,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2295,8 +2397,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 100.05570000066655,
-      "llm_calls": 0
+      "latency_ms": 22.38680000300519,
+      "llm_calls": 1
     },
     {
       "id": "T06",
@@ -2331,6 +2433,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2343,8 +2448,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 65.60460000036983,
-      "llm_calls": 0
+      "latency_ms": 16.235899995081127,
+      "llm_calls": 1
     },
     {
       "id": "T07",
@@ -2379,6 +2484,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2391,8 +2499,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 117.45389999850886,
-      "llm_calls": 0
+      "latency_ms": 18.984800000907853,
+      "llm_calls": 1
     },
     {
       "id": "K01",
@@ -2427,6 +2535,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2439,8 +2550,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 145.20670000638347,
-      "llm_calls": 0
+      "latency_ms": 21.365399996284395,
+      "llm_calls": 1
     },
     {
       "id": "K02",
@@ -2475,6 +2586,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2487,8 +2601,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 165.2436000003945,
-      "llm_calls": 0
+      "latency_ms": 18.416399994748645,
+      "llm_calls": 1
     },
     {
       "id": "K03",
@@ -2523,6 +2637,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2535,8 +2652,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 123.8115000014659,
-      "llm_calls": 0
+      "latency_ms": 15.832100005354732,
+      "llm_calls": 1
     },
     {
       "id": "K04",
@@ -2571,6 +2688,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2583,8 +2703,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 84.96220000233734,
-      "llm_calls": 0
+      "latency_ms": 18.066099990392104,
+      "llm_calls": 1
     },
     {
       "id": "K05",
@@ -2619,6 +2739,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2631,8 +2754,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 92.33970000059344,
-      "llm_calls": 0
+      "latency_ms": 16.64899999741465,
+      "llm_calls": 1
     },
     {
       "id": "K06",
@@ -2667,6 +2790,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2679,8 +2805,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 115.17360000289045,
-      "llm_calls": 0
+      "latency_ms": 22.969699988607317,
+      "llm_calls": 1
     },
     {
       "id": "K07",
@@ -2715,6 +2841,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2727,8 +2856,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 152.12749999773223,
-      "llm_calls": 0
+      "latency_ms": 20.202700005029328,
+      "llm_calls": 1
     },
     {
       "id": "K08",
@@ -2763,6 +2892,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2775,8 +2907,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 191.73910000245087,
-      "llm_calls": 0
+      "latency_ms": 80.5879000108689,
+      "llm_calls": 1
     },
     {
       "id": "K09",
@@ -2811,6 +2943,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2823,8 +2958,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 111.0329000002821,
-      "llm_calls": 0
+      "latency_ms": 17.4340000085067,
+      "llm_calls": 1
     },
     {
       "id": "A01",
@@ -2859,6 +2994,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2871,8 +3009,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 141.03869999962626,
-      "llm_calls": 0
+      "latency_ms": 74.57359999534674,
+      "llm_calls": 1
     },
     {
       "id": "A02",
@@ -2907,6 +3045,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2919,8 +3060,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 129.4638000035775,
-      "llm_calls": 0
+      "latency_ms": 17.40010001230985,
+      "llm_calls": 1
     },
     {
       "id": "A03",
@@ -2955,6 +3096,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -2967,8 +3111,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 172.8713999982574,
-      "llm_calls": 0
+      "latency_ms": 20.0089999998454,
+      "llm_calls": 1
     },
     {
       "id": "A04",
@@ -3003,6 +3147,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3015,8 +3162,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 122.29189999925438,
-      "llm_calls": 0
+      "latency_ms": 34.130899992305785,
+      "llm_calls": 1
     },
     {
       "id": "A05",
@@ -3051,6 +3198,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3063,8 +3213,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 157.77220000018133,
-      "llm_calls": 0
+      "latency_ms": 25.021299996296875,
+      "llm_calls": 1
     },
     {
       "id": "A06",
@@ -3099,6 +3249,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3111,8 +3264,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 110.08099999889964,
-      "llm_calls": 0
+      "latency_ms": 22.57610000378918,
+      "llm_calls": 1
     },
     {
       "id": "A07",
@@ -3147,6 +3300,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3159,8 +3315,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 143.34919999964768,
-      "llm_calls": 0
+      "latency_ms": 24.68360000057146,
+      "llm_calls": 1
     },
     {
       "id": "A08",
@@ -3195,6 +3351,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3207,8 +3366,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 156.15970000362722,
-      "llm_calls": 0
+      "latency_ms": 22.415500003262423,
+      "llm_calls": 1
     },
     {
       "id": "A09",
@@ -3243,6 +3402,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3255,8 +3417,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 113.7592000013683,
-      "llm_calls": 0
+      "latency_ms": 21.85299999837298,
+      "llm_calls": 1
     },
     {
       "id": "A10",
@@ -3291,6 +3453,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3303,8 +3468,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 141.28079999500187,
-      "llm_calls": 0
+      "latency_ms": 25.743500009411946,
+      "llm_calls": 1
     },
     {
       "id": "A11",
@@ -3339,6 +3504,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3351,8 +3519,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 197.7995999986888,
-      "llm_calls": 0
+      "latency_ms": 26.289100002031773,
+      "llm_calls": 1
     },
     {
       "id": "A12",
@@ -3387,6 +3555,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3399,8 +3570,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 157.12640000128886,
-      "llm_calls": 0
+      "latency_ms": 26.45249999477528,
+      "llm_calls": 1
     },
     {
       "id": "A13",
@@ -3435,6 +3606,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3447,8 +3621,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 191.6477999984636,
-      "llm_calls": 0
+      "latency_ms": 48.116700010723434,
+      "llm_calls": 1
     },
     {
       "id": "U01",
@@ -3483,6 +3657,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3495,8 +3672,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 0.0
       },
-      "latency_ms": 75.02309999836143,
-      "llm_calls": 0
+      "latency_ms": 20.595800000592135,
+      "llm_calls": 1
     },
     {
       "id": "U02",
@@ -3531,6 +3708,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3543,8 +3723,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 0.0
       },
-      "latency_ms": 72.74730000062846,
-      "llm_calls": 0
+      "latency_ms": 20.912300009513274,
+      "llm_calls": 1
     },
     {
       "id": "U03",
@@ -3579,6 +3759,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3591,8 +3774,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 0.0
       },
-      "latency_ms": 90.19270000135293,
-      "llm_calls": 0
+      "latency_ms": 20.141100001637824,
+      "llm_calls": 1
     },
     {
       "id": "U04",
@@ -3627,6 +3810,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3639,8 +3825,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 0.0
       },
-      "latency_ms": 100.46850000071572,
-      "llm_calls": 0
+      "latency_ms": 158.62400000332855,
+      "llm_calls": 1
     },
     {
       "id": "U05",
@@ -3675,6 +3861,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3687,8 +3876,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 0.0
       },
-      "latency_ms": 90.8837000024505,
-      "llm_calls": 0
+      "latency_ms": 22.22009999968577,
+      "llm_calls": 1
     },
     {
       "id": "U06",
@@ -3723,6 +3912,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3735,8 +3927,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 0.0
       },
-      "latency_ms": 74.96279999759281,
-      "llm_calls": 0
+      "latency_ms": 186.8720999918878,
+      "llm_calls": 1
     },
     {
       "id": "U07",
@@ -3771,6 +3963,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3783,8 +3978,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 0.0
       },
-      "latency_ms": 130.3226000018185,
-      "llm_calls": 0
+      "latency_ms": 17.196200002217665,
+      "llm_calls": 1
     },
     {
       "id": "U08",
@@ -3819,6 +4014,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3831,8 +4029,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 63.05100000463426,
-      "llm_calls": 0
+      "latency_ms": 52.256900002248585,
+      "llm_calls": 1
     },
     {
       "id": "X01",
@@ -3867,6 +4065,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3879,8 +4080,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 83.87819999916246,
-      "llm_calls": 0
+      "latency_ms": 24.02500000607688,
+      "llm_calls": 1
     },
     {
       "id": "X02",
@@ -3915,6 +4116,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3927,8 +4131,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 116.36100000032457,
-      "llm_calls": 0
+      "latency_ms": 50.59040000196546,
+      "llm_calls": 1
     },
     {
       "id": "X03",
@@ -3963,6 +4167,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -3975,8 +4182,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 81.84369999798946,
-      "llm_calls": 0
+      "latency_ms": 45.18649999226909,
+      "llm_calls": 1
     },
     {
       "id": "X04",
@@ -4011,6 +4218,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -4023,8 +4233,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 102.7263999931165,
-      "llm_calls": 0
+      "latency_ms": 20.909900005790405,
+      "llm_calls": 1
     },
     {
       "id": "X05",
@@ -4059,6 +4269,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -4071,8 +4284,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 165.04600000189384,
-      "llm_calls": 0
+      "latency_ms": 51.957000003312714,
+      "llm_calls": 1
     },
     {
       "id": "X06",
@@ -4107,6 +4320,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -4119,8 +4335,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 185.51380000280915,
-      "llm_calls": 0
+      "latency_ms": 29.74050000193529,
+      "llm_calls": 1
     },
     {
       "id": "X07",
@@ -4155,6 +4371,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -4167,8 +4386,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 73.24250000237953,
-      "llm_calls": 0
+      "latency_ms": 22.818600002210587,
+      "llm_calls": 1
     },
     {
       "id": "F01",
@@ -4203,6 +4422,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -4215,8 +4437,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 90.4205999977421,
-      "llm_calls": 0
+      "latency_ms": 25.683200001367368,
+      "llm_calls": 1
     },
     {
       "id": "F02",
@@ -4251,6 +4473,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -4263,8 +4488,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 70.88690000091447,
-      "llm_calls": 0
+      "latency_ms": 40.91640000115149,
+      "llm_calls": 1
     },
     {
       "id": "F03",
@@ -4299,6 +4524,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -4311,8 +4539,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 85.72339999955148,
-      "llm_calls": 0
+      "latency_ms": 26.160699999309145,
+      "llm_calls": 1
     },
     {
       "id": "F04",
@@ -4347,6 +4575,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -4359,8 +4590,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 95.0583000012557,
-      "llm_calls": 0
+      "latency_ms": 31.603900002664886,
+      "llm_calls": 1
     },
     {
       "id": "F05",
@@ -4395,6 +4626,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -4407,8 +4641,8 @@
         "conflict_handling": 0.0,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 87.372800000594,
-      "llm_calls": 0
+      "latency_ms": 51.49810000148136,
+      "llm_calls": 1
     },
     {
       "id": "F06",
@@ -4443,6 +4677,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -4455,8 +4692,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 134.62710000021616,
-      "llm_calls": 0
+      "latency_ms": 112.01620000065304,
+      "llm_calls": 1
     },
     {
       "id": "F07",
@@ -4491,6 +4728,9 @@
       "degraded": false,
       "provider_error": false,
       "error_class": null,
+      "error_status": null,
+      "quota_type": null,
+      "retry_after": null,
       "primary_error": null,
       "fallback_error": null,
       "checks": {
@@ -4503,8 +4743,8 @@
         "conflict_handling": null,
         "abstention_accuracy": 1.0
       },
-      "latency_ms": 122.54550000216113,
-      "llm_calls": 0
+      "latency_ms": 30.354799993801862,
+      "llm_calls": 1
     }
   ]
 }

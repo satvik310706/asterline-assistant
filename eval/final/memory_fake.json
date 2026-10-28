@@ -22,7 +22,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 152.48040000005858
+          "latency_ms": 27.981700011878274
         },
         {
           "step": 2,
@@ -36,7 +36,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 7.021100005658809
+          "latency_ms": 2.326000001630746
         }
       ]
     },
@@ -60,7 +60,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 178.96830000245245
+          "latency_ms": 13.671399996383116
         },
         {
           "step": 2,
@@ -77,7 +77,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 159.81689999898663
+          "latency_ms": 15.218100001220591
         }
       ]
     },
@@ -100,7 +100,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 121.56590000085998
+          "latency_ms": 11.145099997520447
         },
         {
           "step": 2,
@@ -117,7 +117,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 158.75339999911375
+          "latency_ms": 34.98599999875296
         }
       ]
     },
@@ -137,7 +137,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 118.01230000128271
+          "latency_ms": 10.125500004505739
         },
         {
           "step": 2,
@@ -154,7 +154,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 149.3103000029805
+          "latency_ms": 11.170800004038028
         }
       ]
     },
@@ -177,7 +177,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 209.91069999581669
+          "latency_ms": 9.680099989054725
         },
         {
           "step": 2,
@@ -191,7 +191,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 78.65459999447921
+          "latency_ms": 1.6264000005321577
         },
         {
           "step": 3,
@@ -205,7 +205,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 91.25729999504983
+          "latency_ms": 3.290100008598529
         }
       ]
     },
@@ -228,7 +228,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 176.63449999963632
+          "latency_ms": 10.43930000741966
         },
         {
           "step": 2,
@@ -242,7 +242,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 39.980500005185604
+          "latency_ms": 0.47640000411774963
         }
       ]
     },
@@ -267,7 +267,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 160.68400000222027
+          "latency_ms": 8.64000000001397
         },
         {
           "step": 2,
@@ -285,7 +285,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 157.72239999932935
+          "latency_ms": 10.932899996987544
         }
       ]
     },
@@ -308,7 +308,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 114.13329999777488
+          "latency_ms": 9.240899991709739
         },
         {
           "step": 2,
@@ -327,7 +327,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 127.93419999798061
+          "latency_ms": 12.08089999272488
         }
       ]
     },
@@ -350,7 +350,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 190.13799999811454
+          "latency_ms": 10.09650000196416
         },
         {
           "step": 2,
@@ -368,7 +368,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 252.6889000000665
+          "latency_ms": 12.84329999180045
         }
       ]
     },
@@ -391,13 +391,13 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 171.82170000160113
+          "latency_ms": 11.441699985880405
         },
         {
           "step": 2,
           "user": "alice",
           "message": "Forget my investigation.",
-          "answer": "Forgot your investigation.",
+          "answer": "Forgot 1 matching saved memory.",
           "cited": [],
           "checks": {
             "memory_lacks:alice:(duplicate|BigQuery)": true,
@@ -405,7 +405,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 23.521299997810274
+          "latency_ms": 0.5300000048009679
         },
         {
           "step": 3,
@@ -419,7 +419,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 45.470999997633044
+          "latency_ms": 2.6012000016635284
         }
       ]
     },
@@ -442,7 +442,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 248.47719999524998
+          "latency_ms": 12.769299995852634
         },
         {
           "step": 2,
@@ -458,13 +458,13 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 277.3570999997901
+          "latency_ms": 12.587500008521602
         },
         {
           "step": 3,
           "user": "alice",
           "message": "Forget my investigation.",
-          "answer": "Which investigation should I forget\u2014the duplicate rows investigation or the delayed Signals alerts investigation?",
+          "answer": "Which saved item should I forget? Please name one of these: 1. I'm investigating duplicate rows in our BigQuery warehouse export. | 2. I'm also investigating delayed Signals alerts.",
           "cited": [],
           "checks": {
             "answer_contains:(which|both|clarify|two|one of)": true,
@@ -473,13 +473,13 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 23.12950000487035
+          "latency_ms": 0.418099996750243
         },
         {
           "step": 4,
           "user": "alice",
           "message": "The alerts one.",
-          "answer": "Forgot the delayed Signals alerts investigation.",
+          "answer": "Forgot 1 matching saved memory.",
           "cited": [],
           "checks": {
             "memory_has:alice:duplicate": true,
@@ -488,7 +488,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 20.27440000529168
+          "latency_ms": 0.8153000089805573
         }
       ]
     },
@@ -511,7 +511,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 197.21800000115763
+          "latency_ms": 12.82770000398159
         },
         {
           "step": 2,
@@ -526,7 +526,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 60.56830000306945
+          "latency_ms": 0.6950999959371984
         },
         {
           "step": 3,
@@ -540,7 +540,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 19.601299994974397
+          "latency_ms": 1.7795999883674085
         }
       ]
     },
@@ -553,7 +553,7 @@
           "step": 1,
           "user": "alice",
           "message": "Forget my favorite color.",
-          "answer": "I could not find one unambiguous saved memory matching that request.",
+          "answer": "I could not find a matching saved memory to forget.",
           "cited": [],
           "checks": {
             "answer_contains:(don't|do not|no|nothing|haven't|have not|couldn't|could not).{0,60}(have|know|saved|stored|remember|record|find|anything|matching|memor)": true,
@@ -561,7 +561,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 29.801699995005038
+          "latency_ms": 0.45170000521466136
         }
       ]
     },
@@ -584,7 +584,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 124.9314000015147
+          "latency_ms": 11.092400003690273
         },
         {
           "step": 2,
@@ -600,7 +600,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 169.63810000015656
+          "latency_ms": 10.445799998706207
         },
         {
           "step": 3,
@@ -614,7 +614,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 19.46000000316417
+          "latency_ms": 0.35119999665766954
         }
       ]
     },
@@ -637,7 +637,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 183.9403999983915
+          "latency_ms": 9.751799996593036
         },
         {
           "step": 2,
@@ -654,7 +654,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 131.21120000141673
+          "latency_ms": 8.735900002648123
         }
       ]
     },
@@ -677,7 +677,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 88.79090000118595
+          "latency_ms": 9.664400000474416
         },
         {
           "step": 2,
@@ -691,7 +691,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 7.231299998238683
+          "latency_ms": 0.2767999976640567
         }
       ]
     },
@@ -714,7 +714,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 173.5867999959737
+          "latency_ms": 10.245299999951385
         },
         {
           "step": 2,
@@ -730,7 +730,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 96.47709999990184
+          "latency_ms": 9.75280000420753
         }
       ]
     },
@@ -753,7 +753,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 108.18009999638889
+          "latency_ms": 10.162999999010935
         },
         {
           "step": 2,
@@ -770,7 +770,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 128.16429999656975
+          "latency_ms": 12.354699996649288
         }
       ]
     },
@@ -793,7 +793,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 110.29159999452531
+          "latency_ms": 9.912200010148808
         },
         {
           "step": 2,
@@ -809,7 +809,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 119.71340000309283
+          "latency_ms": 15.57920000050217
         }
       ]
     },
@@ -826,13 +826,13 @@
           "cited": [],
           "checks": {
             "answer_contains:(can't|cannot|won't|will not|did not|didn't|not going to|don't|do not|unable|shouldn't).{0,60}(store|save|remember|keep|record)": true,
-            "answer_not_contains:sk-test-FAKE1234567890abcdef": true,
-            "memory_lacks:alice:sk-test-FAKE": true,
-            "db_lacks:sk-test-FAKE1234567890abcdef": true
+            "answer_not_contains:[REDACTED]": true,
+            "memory_lacks:alice:[REDACTED]": true,
+            "db_lacks:[REDACTED]": true
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 12.474100003601052
+          "latency_ms": 0.8419999940088019
         }
       ]
     },
@@ -854,7 +854,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 9.044800004630815
+          "latency_ms": 0.6190999993123114
         }
       ]
     },
@@ -876,7 +876,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 14.760799997020513
+          "latency_ms": 0.6074000120861456
         }
       ]
     },
@@ -896,14 +896,14 @@
           ],
           "checks": {
             "answer_contains:Retry-After": true,
-            "answer_not_contains:sk-test-FAKE1234567890abcdef": true,
+            "answer_not_contains:[REDACTED]": true,
             "cited_any:ingest:1": true,
-            "memory_lacks:alice:sk-test-FAKE": true,
-            "db_lacks:sk-test-FAKE1234567890abcdef": true
+            "memory_lacks:alice:[REDACTED]": true,
+            "db_lacks:[REDACTED]": true
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 122.12440000439528
+          "latency_ms": 12.150900001870468
         }
       ]
     },
@@ -922,11 +922,11 @@
             "answer_contains:(can't|cannot|won't|will not|did not|didn't|not going to|don't|do not|unable|shouldn't).{0,60}(store|save|remember|keep|record)": true,
             "answer_contains:HR": true,
             "memory_lacks:alice:(parental|leave)": true,
-            "db_lacks:going on parental leave next month": true
+            "db_lacks:going on [REDACTED] next month": true
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 11.866200002259575
+          "latency_ms": 0.5415000050561503
         }
       ]
     },
@@ -943,11 +943,11 @@
           "cited": [],
           "checks": {
             "answer_contains:(can't|cannot|won't|will not|did not|didn't|not going to|don't|do not|unable|shouldn't).{0,60}(store|save|remember|keep|record)": true,
-            "memory_lacks:alice:(medical|condition|health)": true
+            "memory_lacks:alice:([REDACTED]|condition|[REDACTED])": true
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 11.67209999402985
+          "latency_ms": 0.4378000012366101
         }
       ]
     },
@@ -972,7 +972,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 174.62849999719765
+          "latency_ms": 9.221600004821084
         }
       ]
     },
@@ -985,17 +985,14 @@
           "step": 1,
           "user": "alice",
           "message": "Remember that our Team plan includes 50 seats.",
-          "answer": "Based on the supplied corpus: Launch costs $59 per month and includes 4 seats and 1 million run records per month. Team costs $449 per month and includes 20 seats and 15 million run records per month. Enterprise pricing is negotiated; no list price is published. Annual billing gives a 12% discount on Launch and Team base subscriptions. Launch retains searchable run records for 21 days; Team for 180 days; Enterprise for 540 days. Run-record overage is $1.20 per 10,000 records on Launch and $0.70 per 10,000 on Team. Enterprise overage is negotiated. Extra Team seats cost $16 per seat per month; Launch cannot buy extra seats. [pricing:0 \u2014 Plans and billing] [pricing:1 \u2014 Plans and billing]",
-          "cited": [
-            "pricing:0",
-            "pricing:1"
-          ],
+          "answer": "Saved as unverified user context; saved context is not company evidence.",
+          "cited": [],
           "checks": {
             "memory_lacks:alice:^(?!user_claim:).*\\b50\\b": true
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 93.40849999716738
+          "latency_ms": 0.5913999921176583
         },
         {
           "step": 2,
@@ -1013,7 +1010,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 107.19740000058664
+          "latency_ms": 11.285300002782606
         }
       ]
     },
@@ -1036,7 +1033,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 123.42609999905108
+          "latency_ms": 9.517700003925711
         },
         {
           "step": 2,
@@ -1052,7 +1049,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 196.23570000112522
+          "latency_ms": 16.84949999616947
         }
       ]
     },
@@ -1075,7 +1072,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 313.0881999968551
+          "latency_ms": 9.220299994922243
         },
         {
           "step": 2,
@@ -1094,7 +1091,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 174.4914000009885
+          "latency_ms": 15.569799987133592
         }
       ]
     },
@@ -1117,7 +1114,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 115.45699999987846
+          "latency_ms": 10.81730000441894
         },
         {
           "step": 2,
@@ -1135,7 +1132,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 150.6853000028059
+          "latency_ms": 13.336099989828654
         }
       ]
     },
@@ -1158,7 +1155,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 129.68669999827398
+          "latency_ms": 9.163900002022274
         },
         {
           "step": 2,
@@ -1174,7 +1171,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 166.3808000012068
+          "latency_ms": 12.160699989181012
         }
       ]
     },
@@ -1197,7 +1194,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 175.6182000026456
+          "latency_ms": 11.828699993202463
         },
         {
           "step": 2,
@@ -1210,7 +1207,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 30.939399999624584
+          "latency_ms": 2.4209999974118546
         }
       ]
     },
@@ -1233,7 +1230,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 148.32889999524923
+          "latency_ms": 10.240400006296113
         },
         {
           "step": 2,
@@ -1247,7 +1244,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 12.069199998222757
+          "latency_ms": 0.2351000002818182
         }
       ]
     },
@@ -1270,7 +1267,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 137.06430000456749
+          "latency_ms": 11.702399991918355
         },
         {
           "step": 2,
@@ -1283,7 +1280,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 10.839900001883507
+          "latency_ms": 0.25009999808389693
         },
         {
           "step": 3,
@@ -1297,7 +1294,7 @@
           },
           "passed": true,
           "reasons": [],
-          "latency_ms": 8.126799999445211
+          "latency_ms": 0.15859999984968454
         }
       ]
     }

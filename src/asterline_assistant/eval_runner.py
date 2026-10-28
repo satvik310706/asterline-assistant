@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+import tempfile
 import time
 import uuid
 from collections import defaultdict
@@ -64,7 +65,8 @@ def citation_ids(answer: str) -> list[str]:
 
 def cache_key(row: dict[str, Any], provider: str, model: str, config: str, evidence: EvidencePack) -> str:
     evidence_hash = hashlib.sha256(json.dumps([item.chunk.model_dump(mode="json") for item in evidence.chunks], sort_keys=True).encode()).hexdigest()
-    payload = {"provider": provider, "model": model, "config": config, "pipeline_revision": "improved-v3" if config == "improved" else "baseline-v1", "question": row["question"], "evidence_hash": evidence_hash}
+    history_hash = hashlib.sha256(json.dumps(row.get("history", []), sort_keys=True).encode()).hexdigest()
+    payload = {"provider": provider, "model": model, "config": config, "pipeline_revision": "improved-v18" if config == "improved" else "baseline-v4", "response_schema": "provider-degraded-v4", "question": row["question"], "history_hash": history_hash, "evidence_hash": evidence_hash}
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
@@ -161,7 +163,9 @@ def run(dataset: Path, settings: Settings, limit: int | None = None, skip_prefli
         provider = make_provider(settings.llm_provider, settings.gemini_model, settings.ollama_model)
     requested_provider = provider.name
     requested_model = provider.model
-    memory = MemoryStore(settings.sqlite_path)
+    # Research cases are independent examples. Do not read or write the app DB,
+    # nor allow a memory written by one case to influence another case.
+    evaluation_memory_dir = tempfile.TemporaryDirectory(prefix="asterline-research-eval-")
     rows = [json.loads(line) for line in dataset.read_text(encoding="utf-8").splitlines() if line.strip()]
     if limit is not None:
         rows = rows[:limit]
@@ -191,7 +195,8 @@ def run(dataset: Path, settings: Settings, limit: int | None = None, skip_prefli
                     print(format_failure(provider.name, provider.model, error, "primary"))
                     print("Eval preflight failed; no cases were started.")
                     return output_path
-        for row in rows:
+        for case_index, row in enumerate(rows):
+            memory = MemoryStore(Path(evaluation_memory_dir.name) / f"case-{case_index}-{uuid.uuid4().hex}.sqlite3")
             started = time.perf_counter()
             status = "ok"
             response: ResearchResponse
@@ -238,6 +243,7 @@ def run(dataset: Path, settings: Settings, limit: int | None = None, skip_prefli
                 response = _source_only_response(evidence if "evidence" in locals() else EvidencePack(query=row["question"], chunks=[]), provider.name, provider.model, error_class, False)
             finally:
                 clear_trace_context()
+                memory.connection.close()
             calls = max(getattr(provider, "calls", 0) - calls_before, 0)
             result = _case_result(row, response, status, (time.perf_counter() - started) * 1000, calls)
             if error_message:
@@ -274,6 +280,7 @@ def run(dataset: Path, settings: Settings, limit: int | None = None, skip_prefli
             print(json.dumps(item, sort_keys=True))
         return output_path
     finally:
+        evaluation_memory_dir.cleanup()
         if old_project is None:
             os.environ.pop("LANGSMITH_PROJECT", None)
         else:

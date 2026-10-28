@@ -1,6 +1,6 @@
 # Asterline Assistant — Take-home submission
 
-Repository: [PASTE_REPOSITORY_URL_HERE]
+Repository: https://github.com/satvik310706/asterline-assistant
 LangSmith traces: [PASTE_SHARED_TRACE_LINKS_HERE]
 
 ## Executive summary
@@ -16,6 +16,8 @@ uv run asterline run
 
 ## Generated evaluation artifacts
 baseline_fake.json: provider=fake config=baseline cases=80
+  model: deterministic
+  fallback disabled: True
   retrieval_recall_at_5: 0.9743589743589743 (78/80 applicable)
   mrr: 0.7653846153846156 (78/80 applicable)
   fact_accuracy: 0.725 (80/80 applicable)
@@ -24,18 +26,89 @@ baseline_fake.json: provider=fake config=baseline cases=80
   citation_recall: 0.8076923076923077 (78/80 applicable)
   conflict_handling: 0.42857142857142855 (7/80 applicable)
   abstention_accuracy: 0.9125 (80/80 applicable)
+  provider_error_count: 0
+  eval_error_count: 0
+  llm_calls_per_question: 1.0
   fallback_fraction: 0.0 (80/80 applicable)
-improved_fake.json: provider=fake config=improved cases=80
+baseline_gemini.json: provider=gemini config=baseline cases=80
+  model: gemini-3.5-flash
+  fallback disabled: True
+  retrieval_recall_at_5: 0.95 (80/80 applicable)
+  mrr: 0.8425925925925927 (18/80 applicable)
+  fact_accuracy: 1.0 (18/80 applicable)
+  citation_validity: 1.0 (18/80 applicable)
+  citation_precision: 0.9074074074074073 (18/80 applicable)
+  citation_recall: 1.0 (18/80 applicable)
+  conflict_handling: 0.0 (0/80 applicable)
+  abstention_accuracy: 1.0 (18/80 applicable)
+  provider_error_count: 62
+  eval_error_count: 0
+  llm_calls_per_question: 1.5625
+  fallback_fraction: 0.0 (18/80 applicable)
+baseline_ollama.json: provider=ollama config=baseline cases=80
+  model: llama3.2:3b
+  fallback disabled: True
   retrieval_recall_at_5: 0.9743589743589743 (78/80 applicable)
-  mrr: 0.758974358974359 (78/80 applicable)
-  fact_accuracy: 0.7 (80/80 applicable)
+  mrr: 0.7653846153846156 (78/80 applicable)
+  fact_accuracy: 0.4625 (80/80 applicable)
   citation_validity: 1.0 (80/80 applicable)
-  citation_precision: 0.5833333333333334 (78/80 applicable)
-  citation_recall: 0.7756410256410257 (78/80 applicable)
-  conflict_handling: 0.42857142857142855 (7/80 applicable)
+  citation_precision: 0.6132478632478632 (78/80 applicable)
+  citation_recall: 0.46794871794871806 (78/80 applicable)
+  conflict_handling: 0.5714285714285714 (7/80 applicable)
+  abstention_accuracy: 0.7875 (80/80 applicable)
+  provider_error_count: 0
+  eval_error_count: 0
+  llm_calls_per_question: 1.3875
+  fallback_fraction: 0.0 (74/80 applicable)
+improved_fake.json: provider=fake config=improved cases=80
+  model: deterministic
+  fallback disabled: True
+  retrieval_recall_at_5: 0.9358974358974359 (78/80 applicable)
+  mrr: 0.7049145299145301 (78/80 applicable)
+  fact_accuracy: 0.775 (80/80 applicable)
+  citation_validity: 0.975 (80/80 applicable)
+  citation_precision: 0.6217948717948718 (78/80 applicable)
+  citation_recall: 0.7713675213675213 (78/80 applicable)
+  conflict_handling: 1.0 (7/80 applicable)
   abstention_accuracy: 0.9125 (80/80 applicable)
+  provider_error_count: 0
+  eval_error_count: 0
+  llm_calls_per_question: 0.6875
   fallback_fraction: 0.0 (80/80 applicable)
-memory_fake.json: provider=fake config=None cases=None
+improved_ollama.json: provider=ollama config=improved cases=80
+  model: llama3.2:3b
+  fallback disabled: True
+  retrieval_recall_at_5: 0.9487179487179487 (78/80 applicable)
+  mrr: 0.7017094017094019 (78/80 applicable)
+  fact_accuracy: 0.55 (80/80 applicable)
+  citation_validity: 0.975 (80/80 applicable)
+  citation_precision: 0.6089743589743589 (78/80 applicable)
+  citation_recall: 0.5299145299145299 (78/80 applicable)
+  conflict_handling: 0.8571428571428571 (7/80 applicable)
+  abstention_accuracy: 0.8125 (80/80 applicable)
+  provider_error_count: 0
+  eval_error_count: 0
+  llm_calls_per_question: 1.2875
+  fallback_fraction: 0.0 (71/80 applicable)
+memory_fake.json: provider=fake scenarios=34 passed=34/34
+  memory_write_precision: 1.0 (aggregate over 34 scenarios)
+  memory_write_recall: 1.0 (aggregate over 34 scenarios)
+  forget_success: 1.0 (aggregate over 34 scenarios)
+  isolation_leakage: 0 (aggregate over 34 scenarios)
+  secret_leak_count: 0 (aggregate over 34 scenarios)
+  sensitive_stored_count: 0 (aggregate over 34 scenarios)
+  correction-company pass rate: 1.0
+  correction-self pass rate: 1.0
+  forget pass rate: 1.0
+  injection pass rate: 1.0
+  isolation pass rate: 1.0
+  list-memory pass rate: 1.0
+  memory-not-evidence pass rate: 1.0
+  persistence pass rate: 1.0
+  preference pass rate: 1.0
+  secret pass rate: 1.0
+  sensitive pass rate: 1.0
+  stale-confirmation pass rate: 1.0
 
 ## Evidence and memory guarantees
 Citations are parsed and validated against retrieved chunks. Memory is labelled

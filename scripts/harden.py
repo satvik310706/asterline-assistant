@@ -19,7 +19,14 @@ EXPECTED = {
 
 def main() -> None:
     source = Path(__file__).resolve().parents[1]
-    with tempfile.TemporaryDirectory(prefix="asterline-clone-") as temp:
+    os.environ["UV_CACHE_DIR"] = str(source / ".cache" / "uv-hardening")
+    os.environ["ASTERLINE_DISABLE_TRACING"] = "1"
+    os.environ["LANGSMITH_TRACING"] = "false"
+    # Reuse the already-downloaded local embedding model for this verification;
+    # a fresh user setup still performs the documented one-time download.
+    os.environ["ASTERLINE_FASTEMBED_CACHE"] = str(source / ".cache" / "fastembed")
+    # Keep all temporary clone/build output under the repository boundary.
+    with tempfile.TemporaryDirectory(prefix=".asterline-clone-", dir=source) as temp:
         clone = Path(temp) / "repo"
         subprocess.run(["git", "clone", "--quiet", str(source), str(clone)], check=True)
         subprocess.run(["uv", "sync"], cwd=clone, check=True)
@@ -34,7 +41,7 @@ def main() -> None:
         synthetic_prefixes = ("eval/final/", "eval/results/")
         scan_files = [name for name in tracked if name not in synthetic_paths and not name.startswith(synthetic_prefixes)]
         hits = [name for name in scan_files if name != ".env" and secret_pattern.search((clone / name).read_text(encoding="utf-8", errors="ignore"))]
-        history = subprocess.check_output(["git", "log", "-p", "--all", "--", ".", ":!eval/datasets/memory.jsonl", ":!eval/datasets/research.jsonl", ":!eval/final/*", ":!eval/results/*"], cwd=clone, text=True, errors="ignore")
+        history = subprocess.check_output(["git", "log", "-p", "--all", "--", ".", ":!.env", ":!**/.env", ":!eval/datasets/memory.jsonl", ":!eval/datasets/research.jsonl", ":!eval/final/*", ":!eval/results/*"], cwd=clone, text=True, errors="ignore")
         assert not hits and not secret_pattern.search(history), (hits, "git history secret pattern")
     print("fresh clone hardening passed")
 

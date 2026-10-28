@@ -24,6 +24,11 @@ MARKER_RE = re.compile(r"\b(?:not|no longer|isn't|doesn't|cannot|only|superseded
 BOUNDARY_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z\[])")
 
 
+def _safe_report_text(value: str) -> str:
+    """Redact secret-like fixtures from report labels and reasons as well as answers."""
+    return redact_sensitive(value)
+
+
 def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
     temp = path.with_suffix(path.suffix + ".tmp")
     temp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -129,25 +134,10 @@ class MemoryEvalApp:
         original = message
         history = [HistoryMessage.model_validate(item) for item in self.memory.history(session)]
         self.memory.record_message(user, session, "user", message)
-        if re.match(r"(?is)^forget my investigation[.!]?$", message):
-            projects = [record for record in self.memory.list_active(user) if record.type in {"project", "task"}]
-            if len(projects) > 1:
-                response = ResearchResponse(answer="Which investigation should I forget—the duplicate rows investigation or the delayed Signals alerts investigation?", evidence=[], provider=self.provider.name, model=self.provider.model)
-                self.memory.record_message(user, session, "assistant", response.answer)
-                return response
-            if len(projects) == 1:
-                self.memory.forget(user, projects[0].content)
-                response = ResearchResponse(answer="Forgot your investigation.", evidence=[], provider=self.provider.name, model=self.provider.model)
-                self.memory.record_message(user, session, "assistant", response.answer)
-                return response
-        if re.match(r"(?is)^the alerts one\.?$", message):
-            self.memory.forget(user, "Signals")
-            response = ResearchResponse(answer="Forgot the delayed Signals alerts investigation.", evidence=[], provider=self.provider.name, model=self.provider.model)
-        else:
-            if re.match(r"(?is)^(?:i'?m|i am|our|please always)\s+", message) and not SENSITIVE_RE.search(message) and not re.search(r"(?i)\b(what|how|why|can i)\b", message):
-                content = redact_sensitive(message)
-                self.memory.write_explicit(user, content)
-            response = run_research(message, user, self.retriever, self.provider, self.memory, history=history, use_memory=True)
+        if re.match(r"(?is)^(?:i'?m|i am|our|please always)\s+", message) and not SENSITIVE_RE.search(message) and not re.search(r"(?i)\b(what|how|why|can i)\b", message):
+            content = redact_sensitive(message)
+            self.memory.write_explicit(user, content)
+        response = run_research(message, user, self.retriever, self.provider, self.memory, history=history, use_memory=True)
         if not re.match(r"(?is)^forget everything", message):
             self.memory.record_message(user, session, "assistant", response.answer)
         return response
@@ -166,7 +156,9 @@ def _scenario_result(scenario: dict[str, Any], settings: Settings, provider_name
             started = time.perf_counter()
             response = app.handle(step["user"], step["session"], step["message"])
             checks, reasons = _check_step(step.get("checks", {}), response, app.memory, step["user"], step["message"])
-            steps.append({"step": index, "user": step["user"], "message": redact_sensitive(step["message"]), "answer": redact_sensitive(response.answer), "cited": [chunk_id for chunk_id, _ in citation_pairs(response.answer)], "checks": checks, "passed": all(checks.values()) and not reasons, "reasons": reasons, "latency_ms": (time.perf_counter() - started) * 1000})
+            safe_checks = {_safe_report_text(name): passed for name, passed in checks.items()}
+            safe_reasons = [_safe_report_text(reason) for reason in reasons]
+            steps.append({"step": index, "user": step["user"], "message": _safe_report_text(step["message"]), "answer": _safe_report_text(response.answer), "cited": [chunk_id for chunk_id, _ in citation_pairs(response.answer)], "checks": safe_checks, "passed": all(checks.values()) and not reasons, "reasons": safe_reasons, "latency_ms": (time.perf_counter() - started) * 1000})
     finally:
         app.close()
     return {"id": scenario["id"], "category": scenario["category"], "passed": all(step["passed"] for step in steps), "steps": steps}

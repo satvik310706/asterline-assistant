@@ -55,6 +55,8 @@ def main() -> None:
         dataset = Path(args.dataset) if args.dataset else Path("eval/datasets/research.jsonl")
         if not dataset.exists():
             raise SystemExit("Evaluation dataset not found: eval/datasets/research.jsonl")
+        if args.provider:
+            settings = settings.model_copy(update={"llm_provider": args.provider})
         if args.no_fallback:
             settings = settings.model_copy(update={"eval_no_fallback": True})
         print(run_eval(dataset, settings, limit=args.limit, skip_preflight=args.skip_preflight))

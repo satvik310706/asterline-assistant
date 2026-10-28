@@ -28,6 +28,10 @@ def clear_trace_context() -> None:
 
 
 def _enabled() -> bool:
+    if os.getenv("ASTERLINE_DISABLE_TRACING", "0").strip().lower() in {"1", "true", "yes", "on"}:
+        return False
+    if os.getenv("LANGSMITH_TRACING", "").strip().lower() in {"0", "false", "no", "off"}:
+        return False
     if not (os.getenv("LANGSMITH_API_KEY") or os.getenv("LANGCHAIN_API_KEY")):
         return False
     provider = _trace_context.get("provider") or os.getenv("ASTERLINE_LLM_PROVIDER")
@@ -65,8 +69,34 @@ def traced(name: str) -> Callable[[F], F]:
             safe_input = {"agent": name, "eval_run_id": None, "case_id": None, "category": None, "config": None, "provider": None, "model": None, "attempts": 0, "degraded": False, **_trace_context}
             if args and isinstance(args[0], str):
                 safe_input["text"] = redact_sensitive(args[0])[:2000]
-            traced_call = traceable(name=name, run_type="chain", process_outputs=_trace_output)(lambda _: function(*args, **kwargs))
-            return traced_call(json.dumps(safe_input, sort_keys=True))
+            execution: dict[str, Any] = {"called": False}
+
+            def invoke(_: str) -> Any:
+                execution["called"] = True
+                try:
+                    result = function(*args, **kwargs)
+                except Exception as error:
+                    execution["error"] = error
+                    raise
+                execution["result"] = result
+                return result
+
+            try:
+                traced_call = traceable(name=name, run_type="chain", process_outputs=_trace_output)(invoke)
+            except Exception:
+                # If tracing setup fails, the application still runs once without tracing.
+                return function(*args, **kwargs)
+            try:
+                return traced_call(json.dumps(safe_input, sort_keys=True))
+            except Exception:
+                if not execution["called"]:
+                    # The tracing wrapper failed before entering application code.
+                    return function(*args, **kwargs)
+                if "error" in execution:
+                    raise execution["error"]
+                # Tracing failed after the function returned. Preserve its result and
+                # never repeat a node that may have mutated memory or called an LLM.
+                return execution["result"]
 
         return wrapper  # type: ignore[return-value]
 

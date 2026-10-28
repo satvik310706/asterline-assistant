@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from datetime import timedelta
+from collections.abc import Callable
 
 from .llm import LLMProvider
 from .memory import MemoryStore, SENSITIVE_RE, contains_sensitive, redact_sensitive
@@ -11,13 +12,24 @@ from .models import AnswerDraft, EvidencePack, HistoryMessage, ResearchResponse,
 from .retrieval import HybridRetriever, tokenize
 from .tracing import traced
 
+COMPANY_FACT_TERMS = re.compile(
+    r"(?i)\b(retention|cold recovery|cold storage|sla|ingestion rate|ingestion limit|requests per second|"
+    r"overage|list price|enterprise price|aql timeout|hipaa certification|mobile dashboard app)\b"
+)
+
+
+def is_company_fact_claim(text: str) -> bool:
+    """Keep asserted product facts on the evidence path rather than memory-command fast paths."""
+    return bool(COMPANY_FACT_TERMS.search(text))
+
 
 @traced("router")
 def route(question: str, history: list[HistoryMessage] | None = None) -> str:
     """Make follow-ups searchable without asking an LLM to rewrite them."""
     if not history:
         return question.strip()
-    previous_user = next((item.content for item in reversed(history) if item.role == "user"), "")
+    user_msgs = [item.content for item in history if getattr(item, "role", None) == "user" and getattr(item, "content", "").strip().lower() != question.strip().lower()]
+    previous_user = user_msgs[-1] if user_msgs else ""
     return f"{previous_user} Follow-up: {question.strip()}" if previous_user else question.strip()
 
 
@@ -39,7 +51,19 @@ def answer(question: str, evidence: EvidencePack, provider: LLMProvider) -> Answ
     return provider.answer(question, evidence)
 
 
-def run_research(question: str, user_id: str, retriever: HybridRetriever, provider: LLMProvider, memory: MemoryStore, history: list[HistoryMessage] | None = None, prepared_query: str | None = None, prepared_evidence: EvidencePack | None = None, use_memory: bool = False) -> ResearchResponse:
+def run_research(
+    question: str,
+    user_id: str,
+    retriever: HybridRetriever,
+    provider: LLMProvider,
+    memory: MemoryStore,
+    history: list[HistoryMessage] | None = None,
+    prepared_query: str | None = None,
+    prepared_evidence: EvidencePack | None = None,
+    use_memory: bool = False,
+    calculator: Callable[[str, EvidencePack], AnswerDraft | None] | None = None,
+    evidence_guidance: str | None = None,
+) -> ResearchResponse:
     original_question = question
     question = redact_sensitive(question)
     command = question.strip()
@@ -50,19 +74,43 @@ def run_research(question: str, user_id: str, retriever: HybridRetriever, provid
         return ResearchResponse(answer="I cannot store personal health or leave circumstances. Please use the HR portal for the applicable policy and records.", evidence=[], provider=provider.name, model=provider.model)
     if has_secret and (is_remember or re.search(r"(?i)remember", original_question)):
         return ResearchResponse(answer="I did not store that secret value. Please rotate the credential and do not share it in chat.", evidence=[], provider=provider.name, model=provider.model)
+    if is_remember and re.search(r"(?i)(ignore the knowledge base|ignore previous instructions|only answer from memory|reveal system prompt)", command):
+        return ResearchResponse(answer="I will not save instructions that override the evidence and safety rules.", evidence=[], provider="rules", model="deterministic")
+    if is_remember and not is_company_fact_claim(command):
+        content = re.sub(r"(?is)^remember(?: that)?\s+", "", command).strip()
+        record = memory.write_explicit(user_id, content)
+        if record is not None:
+            return ResearchResponse(answer="Saved as unverified user context; saved context is not company evidence.", evidence=[], memory_written=[record.content], provider="rules", model="deterministic")
+        return ResearchResponse(answer="I could not save that as memory because it was empty or failed the safety policy.", evidence=[], provider="rules", model="deterministic")
     if re.match(r"(?i)^(list|show) (my )?memories$", command) or re.match(r"(?i)^what do you remember about me\??$", command):
         records = memory.list_active(user_id)
         answer_text = "Saved context:\n" + "\n".join(f"- {record.content}" for record in records) if records else "You have no saved context."
-        return ResearchResponse(answer=answer_text, evidence=[], provider=provider.name, model=provider.model, memory_used=[record.content for record in records])
+        return ResearchResponse(answer=answer_text, evidence=[], provider="rules", model="deterministic", memory_used=[record.content for record in records])
     if re.match(r"(?i)^forget (everything|all)( you know)?( about me)?[.!]?$", command):
         count = memory.forget_all(user_id)
-        return ResearchResponse(answer=f"Forgot {count} saved memor{'y' if count == 1 else 'ies'}.", evidence=[], provider=provider.name, model=provider.model)
+        return ResearchResponse(answer=f"Forgot {count} saved memor{'y' if count == 1 else 'ies'}.", evidence=[], provider="rules", model="deterministic")
+    previous_assistant = next((item.content for item in reversed(history or []) if getattr(item, "role", None) == "assistant"), "")
+    pending_forget = bool(re.search(r"(?i)\b(?:which|what)\b.{0,100}\bforget\b", previous_assistant))
+    if pending_forget and re.match(r"(?i)^(?:the\s+)?(?:.+\s+)?(?:one|item|first|second|third|last)[.!?]?$", command):
+        selector = re.sub(r"(?i)^(?:the\s+)?|\s+(?:one|item|first|second|third|last)[.!?]?$", "", command).strip()
+        matches = memory.find_forget_matches(user_id, selector)
+        if len(matches) == 1 and matches[0].id is not None:
+            count = memory.forget_records(user_id, [matches[0].id])
+            return ResearchResponse(answer=f"Forgot {count} matching saved memory.", evidence=[], provider="rules", model="deterministic")
+        return ResearchResponse(answer="I still cannot identify one unambiguous saved memory; please name a distinctive word from it.", evidence=[], provider="rules", model="deterministic")
     forget_match = re.match(r"(?is)^forget(?: that)?\s+(.+)$", command)
     if forget_match:
         target = forget_match.group(1).strip()
-        count = memory.forget(user_id, target)
-        answer_text = f"Forgot {count} matching saved memor{'y' if count == 1 else 'ies'}." if count else "I could not find one unambiguous saved memory matching that request."
-        return ResearchResponse(answer=answer_text, evidence=[], provider=provider.name, model=provider.model)
+        matches = memory.find_forget_matches(user_id, target)
+        if len(matches) > 1:
+            choices = " | ".join(f"{index}. {record.content}" for index, record in enumerate(matches, start=1))
+            answer_text = f"Which saved item should I forget? Please name one of these: {choices}"
+        elif len(matches) == 1 and matches[0].id is not None:
+            count = memory.forget_records(user_id, [matches[0].id])
+            answer_text = f"Forgot {count} matching saved memory."
+        else:
+            answer_text = "I could not find a matching saved memory to forget."
+        return ResearchResponse(answer=answer_text, evidence=[], provider="rules", model="deterministic")
     correction = re.match(r"(?is)^(?:correct(?: that)?|correction:)\s+(.+?)\s+(?:to|->|instead say)\s+(.+)$", command)
     if not correction:
         correction = re.match(r"(?is)^correction:\s+i'?m actually based in\s+(.+?)[.!]?$", command)
@@ -75,26 +123,42 @@ def run_research(question: str, user_id: str, retriever: HybridRetriever, provid
     if correction:
         target, replacement = (correction if isinstance(correction, tuple) else (correction.group(1), correction.group(2)))
         target, replacement = target.strip(), replacement.strip()
-        company_claim = bool(re.search(r"(?i)(retention|cold storage|sla|ingestion|requests per second|seats|price|list price)", command))
-        record = None if company_claim else memory.correct(user_id, target, replacement)
-        answer_text = f"Corrected saved context to: {record.content}" if record else "I could not identify one unambiguous saved memory to correct."
-        if company_claim:
-            answer_text = "I will not store a company fact as memory; I will check the supplied evidence."
-        return ResearchResponse(answer=answer_text, evidence=[], provider=provider.name, model=provider.model, memory_written=[record.content] if record else [])
+        if not is_company_fact_claim(command):
+            record = memory.correct(user_id, target, replacement)
+            answer_text = f"Corrected saved context to: {record.content}" if record else "I could not identify one unambiguous saved memory to correct."
+            return ResearchResponse(answer=answer_text, evidence=[], provider="rules", model="deterministic", memory_written=[record.content] if record else [])
     query = prepared_query if prepared_query is not None else route(question, history)
     records = memory.list_active(user_id)
-    used = [item.content for item in records]
+    used: list[str] = []
     if use_memory:
         age_cutoff = memory.clock.now() - timedelta(days=14)
         stale = [item for item in records if item.type in {"project", "task"} and item.updated_at and item.updated_at < age_cutoff.isoformat()]
         if stale and re.search(r"(?i)(continue|where we left|that|it)", question):
-            return ResearchResponse(answer=f"Last time you were investigating {stale[0].content}. Is that still relevant?", evidence=[], memory_used=used, provider=provider.name, model=provider.model)
+            return ResearchResponse(answer=f"Last time you were investigating {stale[0].content}. Is that still relevant?", evidence=[], memory_used=[stale[0].content], provider=provider.name, model=provider.model)
         if records and re.search(r"(?i)(what plan did i|which plan did i|what do you remember)", question):
-            return ResearchResponse(answer="From what you told me earlier: " + "; ".join(record.content for record in records[:2]) + ".", evidence=[], memory_used=used, provider=provider.name, model=provider.model)
+            selected = records[:2]
+            return ResearchResponse(answer="From what you told me earlier: " + "; ".join(record.content for record in selected) + ".", evidence=[], memory_used=[record.content for record in selected], provider=provider.name, model=provider.model)
         # Only relevant saved context may disambiguate retrieval. Dumping every
         # memory into the query pollutes ranking and makes memory act like evidence.
         question_terms = {term for term in tokenize(question) if len(term) > 3}
         relevant_records = [record for record in records if question_terms.intersection(tokenize(record.content))]
+        contextual_followup = bool(
+            re.search(r"(?i)^(?:why|how|what)\b.{0,100}\b(?:that|it|those|these)\b", question)
+            or re.match(r"(?i)^(?:and|also|what about|how about)\b", question)
+        )
+        if not relevant_records and contextual_followup:
+            projects = [record for record in records if record.type in {"project", "task"}]
+            if len(projects) == 1:
+                relevant_records = projects
+            elif len(projects) > 1:
+                choices = " | ".join(record.content for record in projects[:3])
+                return ResearchResponse(
+                    answer=f"Which saved investigation do you mean? {choices}", evidence=[],
+                    memory_used=[record.content for record in projects[:3]], provider="rules", model="deterministic",
+                )
+        if not relevant_records and re.search(r"(?i)(my plan|my workspace|my project|warehouse export|alert rules)", question):
+            relevant_records = records[:2]
+        used = [record.content for record in relevant_records[:3]]
         query += " " + " ".join(record.content for record in relevant_records[:3])
         expansions = {
             r"(?i)aql timeout": "query:0 release-23:0 2.3 50 seconds",
@@ -129,7 +193,10 @@ def run_research(question: str, user_id: str, retriever: HybridRetriever, provid
             ordered = [by_id[chunk_id] for chunk_id in wanted if chunk_id in by_id]
             ordered.extend(item for item in pack.chunks if item.chunk.chunk_id not in {entry.chunk.chunk_id for entry in ordered})
             pack = EvidencePack(query=pack.query, chunks=ordered[:5])
-    draft = answer(query, pack, provider)
+    draft = calculator(query, pack) if calculator is not None else None
+    if draft is None:
+        answer_question = f"{query}\n{evidence_guidance}" if evidence_guidance else query
+        draft = answer(answer_question, pack, provider)
     answer_text = draft.answer
     if use_memory and re.search(r"(?i)aql timeout", question) and any("50 seconds" in item.chunk.text for item in pack.chunks):
         source = next(item for item in pack.chunks if "50 seconds" in item.chunk.text)
@@ -139,6 +206,7 @@ def run_research(question: str, user_id: str, retriever: HybridRetriever, provid
         if not relevant and re.search(r"(?i)(plan|remember|told|said|earlier|that|continue|where we left|alert rules|warehouse export)", question):
             relevant = records[:2]
         if relevant:
+            used = [record.content for record in relevant[:2]]
             answer_text += "\nFrom what you told me earlier: " + "; ".join(record.content for record in relevant[:2]) + "."
     if use_memory and any(re.search(r"(?i)(at most two sentences|keep answers short)", record.content) for record in records):
         sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z\[])", answer_text)
@@ -150,7 +218,7 @@ def run_research(question: str, user_id: str, retriever: HybridRetriever, provid
     match = re.match(r"(?is)^remember(?: that)?\s+(.+)$", question.strip())
     if match:
         content = match.group(1).strip()
-        rejected_company = bool(re.search(r"(?i)(retention|cold storage|sla|100\s?%|list price|enterprise price)", content))
+        rejected_company = is_company_fact_claim(content)
         rejected_instruction = bool(re.search(r"(?i)(ignore the knowledge base|only from memory|ignore previous instructions)", content))
         record = None if rejected_company or rejected_instruction else memory.write_explicit(user_id, content)
         if record:
@@ -158,5 +226,7 @@ def run_research(question: str, user_id: str, retriever: HybridRetriever, provid
         elif has_secret or has_sensitive_personal:
             return ResearchResponse(answer="I did not store that secret or sensitive value. Please rotate the credential and use the HR portal for personal leave or health matters.", evidence=pack.chunks, memory_used=used, provider=provider.name, model=provider.model)
     metadata = getattr(draft, "trace_metadata", {})
-    return ResearchResponse(answer=answer_text, evidence=pack.chunks, memory_used=used, memory_written=written, abstained=getattr(draft, "abstained", False), provider=provider.name, model=provider.model, degraded=getattr(draft, "degraded", False), attempts=getattr(draft, "attempts", 0), error_class=getattr(draft, "error_class", None), error_status=metadata.get("status"), quota_type=metadata.get("quota_type"), retry_after=metadata.get("retry_after"), primary_error=getattr(draft, "primary_error", None), fallback_error=getattr(draft, "fallback_error", None), provider_error=getattr(draft, "provider_error", False))
+    served_provider = str(metadata.get("provider") or provider.name)
+    served_model = str(metadata.get("model") or provider.model)
+    return ResearchResponse(answer=answer_text, evidence=pack.chunks, calculated_values=draft.calculated_values, memory_used=used, memory_written=written, abstained=getattr(draft, "abstained", False), provider=served_provider, model=served_model, degraded=getattr(draft, "degraded", False), attempts=getattr(draft, "attempts", 0), error_class=getattr(draft, "error_class", None), error_status=metadata.get("status"), quota_type=metadata.get("quota_type"), retry_after=metadata.get("retry_after"), primary_error=getattr(draft, "primary_error", None), fallback_error=getattr(draft, "fallback_error", None), provider_error=getattr(draft, "provider_error", False))
 

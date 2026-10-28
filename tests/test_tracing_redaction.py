@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from asterline_assistant import tracing
 from asterline_assistant.models import ResearchResponse
 
@@ -42,3 +44,53 @@ def test_trace_output_keeps_error_classes_but_drops_raw_replies() -> None:
     assert "raw reply" not in encoded
     assert payload["metadata"]["primary_error_class"] == "ClientError"
     assert payload["metadata"]["fallback_error_class"] == "MissingCitation"
+
+
+def test_tracing_does_not_execute_a_failing_node_twice(monkeypatch) -> None:
+    calls = 0
+
+    def transparent_traceable(**kwargs):
+        return lambda function: lambda value: function(value)
+
+    monkeypatch.setattr(tracing, "_enabled", lambda: True)
+    monkeypatch.setattr(tracing, "traceable", transparent_traceable)
+
+    @tracing.traced("memory_writer")
+    def write_once(_: str) -> None:
+        nonlocal calls
+        calls += 1
+        raise ValueError("simulated node failure")
+
+    with pytest.raises(ValueError, match="simulated node failure"):
+        write_once("synthetic")
+    assert calls == 1
+
+
+def test_trace_upload_failure_after_success_preserves_result_without_retry(monkeypatch) -> None:
+    calls = 0
+
+    def failing_trace_upload(**kwargs):
+        def decorate(function):
+            def traced_call(value):
+                result = function(value)
+                raise RuntimeError("simulated trace upload failure")
+            return traced_call
+        return decorate
+
+    monkeypatch.setattr(tracing, "_enabled", lambda: True)
+    monkeypatch.setattr(tracing, "traceable", failing_trace_upload)
+
+    @tracing.traced("memory_writer")
+    def write_once(_: str) -> str:
+        nonlocal calls
+        calls += 1
+        return "saved"
+
+    assert write_once("synthetic") == "saved"
+    assert calls == 1
+
+
+def test_explicit_tracing_disable_wins_even_if_credentials_exist(monkeypatch) -> None:
+    monkeypatch.setenv("LANGSMITH_API_KEY", "synthetic-test-value")
+    monkeypatch.setenv("ASTERLINE_DISABLE_TRACING", "1")
+    assert not tracing._enabled()

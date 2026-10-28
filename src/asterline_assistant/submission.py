@@ -55,7 +55,7 @@ def build_submission(root: Path = Path(".")) -> tuple[Path, Path]:
     lines = [
         "# Asterline Assistant — Take-home submission",
         "",
-        "Repository: [PASTE_REPOSITORY_URL_HERE]",
+        "Repository: https://github.com/satvik310706/asterline-assistant",
         "LangSmith traces: [PASTE_SHARED_TRACE_LINKS_HERE]",
         "",
         "## Executive summary",
@@ -72,10 +72,29 @@ def build_submission(root: Path = Path(".")) -> tuple[Path, Path]:
         "## Generated evaluation artifacts",
     ]
     for name, data in reports:
-        lines.append(f"{name}: provider={data.get('provider')} config={data.get('config')} cases={data.get('cases')}")
-        for metric, value in data.get("overall", {}).items():
-            if isinstance(value, dict) and "value" in value:
-                lines.append(f"  {metric}: {value['value']} ({value.get('applicable', 0)}/{value.get('total', 0)} applicable)")
+        scenarios = data.get("scenarios", [])
+        case_results = data.get("case_results", [])
+        if scenarios:
+            passed = sum(bool(scenario.get("passed")) for scenario in scenarios)
+            lines.append(f"{name}: provider={data.get('provider', 'unknown')} scenarios={len(scenarios)} passed={passed}/{len(scenarios)}")
+            for metric in ("memory_write_precision", "memory_write_recall", "forget_success", "isolation_leakage", "secret_leak_count", "sensitive_stored_count"):
+                value = data.get(metric)
+                if isinstance(value, (int, float)):
+                    lines.append(f"  {metric}: {value} (aggregate over {len(scenarios)} scenarios)")
+            for category, rate in sorted(data.get("category_pass_rates", {}).items()):
+                lines.append(f"  {category} pass rate: {rate}")
+        else:
+            case_count = data.get("cases", len(case_results))
+            lines.append(f"{name}: provider={data.get('provider')} config={data.get('config', 'unknown')} cases={case_count}")
+            if data.get("model"):
+                lines.append(f"  model: {data['model']}")
+            if "no_fallback" in data:
+                lines.append(f"  fallback disabled: {bool(data['no_fallback'])}")
+            for metric, value in data.get("overall", {}).items():
+                if isinstance(value, dict) and "value" in value:
+                    lines.append(f"  {metric}: {value['value']} ({value.get('applicable', 0)}/{value.get('total', 0)} applicable)")
+                elif isinstance(value, (int, float)):
+                    lines.append(f"  {metric}: {value}")
     lines += [
         "",
         "## Evidence and memory guarantees",

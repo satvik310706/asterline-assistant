@@ -7,13 +7,14 @@ from asterline_assistant.memory import MemoryStore
 from asterline_assistant.models import EvidencePack
 from asterline_assistant.retrieval import TOKEN_RE, tokenize
 import json
+import urllib.request
 
 import pytest
 
 from asterline_assistant.eval_runner import abstention_pass, cache_key, citation_pairs, fact_pass, superseded_pass
 from asterline_assistant.llm import AnswerDraft, CircuitBreaker, GeminiLLM, LLMProvider, OllamaLLM, ProviderFailure, ResilientLLM, classify_failure, format_failure, parse_text_answer
 from asterline_assistant.models import HistoryMessage
-from asterline_assistant.research import route
+from asterline_assistant.research import route, run_research
 from asterline_assistant.retrieval import HybridRetriever
 
 
@@ -67,6 +68,51 @@ def test_memory_forget_correction_and_hard_isolation(tmp_path: Path) -> None:
     assert all("exports" not in item.content for item in store.list_active("alice"))
     assert store.forget_all("alice") == 2
     assert store.list_active("alice") == []
+
+
+def test_natural_forget_is_ambiguity_safe_and_resolves_followup(tmp_path: Path) -> None:
+    store = MemoryStore(tmp_path / "memory.sqlite3")
+    store.write_explicit("alice", "I'm investigating duplicate rows in BigQuery warehouse export.")
+    store.write_explicit("alice", "I'm also investigating delayed Signals alerts.")
+    store.write_explicit("bob", "I'm investigating private project notes.")
+
+    ambiguous = run_research("Forget my investigation.", "alice", object(), FakeLLM(), store, use_memory=True)
+    assert "Which saved item should I forget?" in ambiguous.answer
+    assert len(store.list_active("alice")) == 2
+
+    selected = run_research(
+        "The alerts one.", "alice", object(), FakeLLM(), store,
+        history=[HistoryMessage(role="assistant", content=ambiguous.answer)], use_memory=True,
+    )
+    assert "Forgot 1" in selected.answer
+    assert len(store.list_active("alice")) == 1
+    assert "duplicate rows" in store.list_active("alice")[0].content
+    assert len(store.list_active("bob")) == 1
+
+
+def test_natural_forget_resolves_a_paraphrased_single_target(tmp_path: Path) -> None:
+    store = MemoryStore(tmp_path / "memory.sqlite3")
+    store.write_explicit("alice", "I'm investigating duplicate rows in BigQuery warehouse export.")
+
+    response = run_research("Forget that I'm investigating BigQuery duplicates.", "alice", object(), FakeLLM(), store)
+
+    assert "Forgot 1" in response.answer
+    assert store.list_active("alice") == []
+
+
+def test_contextual_followup_after_restart_uses_single_project_memory_for_retrieval(tmp_path: Path) -> None:
+    store = MemoryStore(tmp_path / "memory.sqlite3")
+    store.write_explicit("alice", "I'm investigating duplicate rows in our BigQuery warehouse export.")
+    retriever = HybridRetriever(
+        load_corpus(ROOT / "data/corpus.jsonl"), tmp_path / "chroma", ROOT / ".cache/fastembed",
+    )
+
+    response = run_research("Why did that happen?", "alice", retriever, FakeLLM(), store, use_memory=True)
+    cited = {chunk_id for chunk_id, _ in citation_pairs(response.answer)}
+
+    assert "INC-2025-12" in response.answer or "Heron" in response.answer
+    assert cited.intersection({"incident-12:0", "incident-12:1", "release-21:1", "export:1"})
+    assert response.memory_used == [store.list_active("alice")[0].content]
 
 
 def test_hybrid_retrieval_uses_one_entry_per_chunk(tmp_path: Path) -> None:
@@ -257,7 +303,37 @@ def test_ollama_plain_text_validates_citations_and_retries_parse_failures() -> N
     provider = OllamaLLM("llama3.2:3b", request_fn=lambda _: next(responses).replace("[$", "["))
     result = provider.answer("q", EvidencePack(query="q", chunks=[{"chunk": chunk}]))
     assert result.cited_chunk_ids == [chunk.chunk_id]
+    assert result.degraded is False
+    assert result.trace_metadata["degraded"] is False
     assert provider.calls == 2
+
+
+def test_ollama_request_allows_slow_local_generation_without_downloading(monkeypatch) -> None:
+    timeouts: list[float] = []
+    payloads: list[dict[str, object]] = []
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self) -> bytes:
+            return b'{"response":"ready"}'
+
+    def fake_urlopen(request: urllib.request.Request, *, timeout: float):
+        timeouts.append(timeout)
+        payloads.append(json.loads(request.data.decode()))
+        return FakeResponse()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    result = OllamaLLM("already-installed")._request("synthetic prompt")
+
+    assert result == "ready"
+    assert timeouts == [45]
+    assert payloads[0]["options"] == {"temperature": 0, "num_predict": 128}
+    assert payloads[0]["keep_alive"] == "10m"
 
 
 @pytest.mark.parametrize("reply,error_class", [("Answer [missing:0 — Nope].", "InvalidCitation"), ("", "EmptyResponse")])
@@ -364,7 +440,7 @@ def test_ollama_prompt_has_no_literal_placeholder() -> None:
     chunk = load_corpus(ROOT / "data/corpus.jsonl")[0]
     provider.answer("q", EvidencePack(query="q", chunks=[{"chunk": chunk}]))
     assert prompts and "[chunk_id" not in prompts[0]
-    assert "never combine a refusal with a factual answer" in prompts[0]
+    assert "never combine a refusal with a factual answer" in prompts[0].lower()
 
 
 def test_parser_normalizes_ollama_source_pipe_citation() -> None:
@@ -379,6 +455,16 @@ def test_parser_normalizes_bare_ollama_source_header_captured_from_real_run() ->
     chunk = load_corpus(ROOT / "data/corpus.jsonl")[0]
     raw_reply = f"The fact is documented.  SOURCE {chunk.chunk_id} | {chunk.title}"
     draft = parse_text_answer(raw_reply, EvidencePack(query="q", chunks=[{"chunk": chunk}]), attempt=1, degraded=True)
+    assert f"[{chunk.chunk_id} — {chunk.title}]" in draft.answer
+    assert draft.cited_chunk_ids == [chunk.chunk_id]
+
+
+def test_parser_normalizes_colon_source_header_captured_from_eval_preflight() -> None:
+    chunk = load_corpus(ROOT / "data/corpus.jsonl")[48]
+    raw_reply = f"The on-call engineers rotate weekly. [SOURCE: {chunk.chunk_id} | {chunk.title}]"
+    provider = OllamaLLM("llama3.2:3b", request_fn=lambda _prompt: raw_reply)
+    draft = provider.answer("Summarize this source", EvidencePack(query="q", chunks=[{"chunk": chunk}]))
+
     assert f"[{chunk.chunk_id} — {chunk.title}]" in draft.answer
     assert draft.cited_chunk_ids == [chunk.chunk_id]
 
@@ -421,7 +507,9 @@ def test_eval_cache_key_separates_provider_model_and_config() -> None:
     fake_key = cache_key(row, "fake", "deterministic", "baseline", evidence)
     gemini_key = cache_key(row, "gemini", "gemini-test", "baseline", evidence)
     improved_key = cache_key(row, "fake", "deterministic", "improved", evidence)
-    assert len({fake_key, gemini_key, improved_key}) == 3
+    history_a_key = cache_key(row | {"history": [{"role": "user", "content": "Team ingestion"}]}, "fake", "deterministic", "baseline", evidence)
+    history_b_key = cache_key(row | {"history": [{"role": "user", "content": "Launch retention"}]}, "fake", "deterministic", "baseline", evidence)
+    assert len({fake_key, gemini_key, improved_key, history_a_key, history_b_key}) == 5
 
 
 def test_eval_run_survives_provider_error_and_degraded_case(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -456,4 +544,77 @@ def test_eval_run_survives_provider_error_and_degraded_case(tmp_path: Path, monk
     assert report["overall"]["provider_error_count"] == 2
     assert {case["status"] for case in report["case_results"]} == {"ok", "provider_error"}
     assert sum(case["provider_error"] for case in report["case_results"]) == 2
+
+
+def test_research_eval_uses_fresh_memory_per_case_and_never_touches_app_database(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from asterline_assistant import eval_runner
+    from asterline_assistant.models import CorpusChunk, RetrievedChunk, ResearchResponse
+
+    class DummyRetriever:
+        def search(self, query: str, k: int = 5) -> list[RetrievedChunk]:
+            chunk = CorpusChunk(chunk_id="test:0", doc_id="test", title="Test source", category="test", owner="test", source_url="test://0", published="20260101", version="1", text="A synthetic source supports an answer.")
+            return [RetrievedChunk(chunk=chunk)]
+
+    dataset = tmp_path / "isolated-cases.jsonl"
+    dataset.write_text(
+        json.dumps({"id": "write", "category": "test", "question": "remember a synthetic preference", "gold_chunks": ["test:0"], "gold_facts": ["saved"], "forbidden_facts": [], "expected": "answer"}) + "\n"
+        + json.dumps({"id": "read", "category": "test", "question": "What do you remember about me?", "gold_chunks": [], "gold_facts": ["no saved context"], "forbidden_facts": ["stale"], "expected": "answer"}) + "\n",
+        encoding="utf-8",
+    )
+    settings = Settings(corpus_path=ROOT / "data/corpus.jsonl", chroma_path=tmp_path / "chroma", fastembed_cache_path=tmp_path / "fastembed", sqlite_path=tmp_path / "app.sqlite3", llm_provider="fake", eval_min_interval_seconds=0)
+    app_store = MemoryStore(settings.sqlite_path)
+    app_store.write_explicit("eval", "stale context from an earlier app session")
+    app_store.connection.close()
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(eval_runner, "validate_corpus_integrity", lambda path: None)
+    monkeypatch.setattr(eval_runner, "HybridRetriever", lambda *args: DummyRetriever())
+    monkeypatch.setattr(eval_runner, "make_provider", lambda *args, **kwargs: FakeLLM())
+    initial_counts: list[int] = []
+
+    def fake_research(question, user_id, retriever, provider, memory, **kwargs):
+        initial_counts.append(len(memory.list_active(user_id)))
+        if question.startswith("remember"):
+            memory.write_explicit(user_id, "new synthetic preference")
+            answer_text = "Saved the synthetic preference. [test:0 — Test source]"
+            evidence = kwargs["prepared_evidence"].chunks
+        else:
+            records = memory.list_active(user_id)
+            answer_text = "You have no saved context." if not records else "Stale context was present."
+            evidence = []
+        return ResearchResponse(answer=answer_text, evidence=evidence, provider=provider.name, model=provider.model)
+
+    monkeypatch.setattr(eval_runner, "run_research", fake_research)
+    report_path = eval_runner.run(dataset, settings)
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+
+    assert initial_counts == [0, 0]
+    assert report["case_results"][1]["answer"] == "You have no saved context."
+    assert report["overall"]["provider_error_count"] == 0
+    unchanged_app_store = MemoryStore(settings.sqlite_path)
+    assert [record.content for record in unchanged_app_store.list_active("eval")] == ["stale context from an earlier app session"]
+    unchanged_app_store.connection.close()
+
+
+def test_research_response_lists_only_memory_used_this_turn(tmp_path: Path) -> None:
+    chunk = load_corpus(ROOT / "data/corpus.jsonl")[10]
+    evidence = EvidencePack(query="What is the current Launch ingestion rate?", chunks=[{"chunk": chunk}])
+    store = MemoryStore(tmp_path / "memory.sqlite3")
+    store.write_explicit("alice", "I prefer concise answers")
+    store.write_explicit("alice", "My workspace uses the Team plan")
+
+    no_context = run_research(
+        "What is the current Launch ingestion rate?", "alice", HybridRetriever.__new__(HybridRetriever),
+        FakeLLM(), store, prepared_evidence=evidence, use_memory=False,
+    )
+    assert no_context.memory_used == []
+
+    personalized = run_research(
+        "What warehouse destinations are available for my Team plan?", "alice", HybridRetriever.__new__(HybridRetriever),
+        FakeLLM(), store,
+        prepared_evidence=EvidencePack(query="Team warehouse destinations", chunks=[{"chunk": load_corpus(ROOT / "data/corpus.jsonl")[15]}]),
+        use_memory=True,
+    )
+    assert personalized.memory_used == ["My workspace uses the Team plan"]
+    store.connection.close()
 

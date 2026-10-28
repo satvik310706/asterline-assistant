@@ -12,6 +12,22 @@ uv run asterline ingest
 uv run asterline run
 ```
 
+The assignment accepts a local demonstration; a public deployment is not required.
+
+The committed `uv.lock` pins the core stack used for this submission:
+
+| Package | Locked version |
+|---|---:|
+| chromadb | 1.5.9 |
+| fastembed | 0.9.1 |
+| google-genai | 2.33.0 |
+| langgraph | 1.2.18 |
+| langsmith | 0.14.13 |
+| pydantic | 2.14.1 |
+| rank-bm25 | 0.2.2 |
+| streamlit | 1.66.1 |
+| pytest | 9.1.1 |
+
 The first index build downloads `BAAI/bge-small-en-v1.5` once through FastEmbed (approximately 70 MB) into `.cache/fastembed/`; it is cached locally and ignored by Git. No generation model is downloaded by setup. Ollama uses the already-installed `llama3.2:3b` when selected or as Gemini fallback.
 
 Copy `.env.example` to `.env` and set Gemini/LangSmith variables locally. The app loads them with python-dotenv without printing values. Missing credentials select FakeLLM demo mode; LangSmith tracing and uploads skip when unavailable. Gemini and Ollama usage may have provider account or local hardware costs; FakeLLM is offline and free.
