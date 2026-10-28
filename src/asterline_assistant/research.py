@@ -6,14 +6,18 @@ import re
 
 from .llm import LLMProvider
 from .memory import MemoryStore
-from .models import AnswerDraft, EvidencePack, ResearchResponse
+from .models import AnswerDraft, EvidencePack, HistoryMessage, ResearchResponse
 from .retrieval import HybridRetriever, tokenize
 from .tracing import traced
 
 
 @traced("router")
-def route(question: str) -> str:
-    return question.strip()
+def route(question: str, history: list[HistoryMessage] | None = None) -> str:
+    """Make follow-ups searchable without asking an LLM to rewrite them."""
+    if not history:
+        return question.strip()
+    previous_user = next((item.content for item in reversed(history) if item.role == "user"), "")
+    return f"{previous_user} Follow-up: {question.strip()}" if previous_user else question.strip()
 
 
 @traced("retriever")
@@ -34,8 +38,8 @@ def answer(question: str, evidence: EvidencePack, provider: LLMProvider) -> Answ
     return provider.answer(question, evidence)
 
 
-def run_research(question: str, user_id: str, retriever: HybridRetriever, provider: LLMProvider, memory: MemoryStore) -> ResearchResponse:
-    query = route(question)
+def run_research(question: str, user_id: str, retriever: HybridRetriever, provider: LLMProvider, memory: MemoryStore, history: list[HistoryMessage] | None = None) -> ResearchResponse:
+    query = route(question, history)
     used = [item.content for item in memory.list_active(user_id)]
     pack = build_evidence(retrieve(query, retriever))
     draft = answer(query, pack, provider)

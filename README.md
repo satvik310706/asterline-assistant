@@ -22,11 +22,14 @@ uv run asterline ingest
 uv run asterline run
 uv run asterline test
 uv run asterline eval
+uv run asterline ask "What is the current Launch ingestion rate?" --provider fake --user alice
 ```
 
 `eval` expects `eval/datasets/research.jsonl` and writes timestamped metrics to `eval/results/`. It uses FakeLLM and a response cache, so evaluation works without keys or network. `ASTERLINE_CONFIG=baseline` is the default; `improved` is reserved for a later phase.
 
-Gemini is selected explicitly with `ASTERLINE_LLM_PROVIDER=gemini` and the existing `GEMINI_API_KEY`/`GEMINI_MODEL` environment variables. Without a key, `auto` uses FakeLLM. LangSmith tracing is a silent no-op when no LangSmith key is configured. No credentials are printed or stored by the application.
+Configuration calls `python-dotenv`'s `load_dotenv()` so the app loads `GEMINI_API_KEY`, `GEMINI_MODEL`, `OLLAMA_MODEL`, and `LANGSMITH_*` from `.env` without printing or logging their values. Gemini is selected explicitly with `--provider gemini` or `ASTERLINE_LLM_PROVIDER=gemini`. Without a key, `auto` uses FakeLLM. LangSmith tracing is a silent no-op when no LangSmith key is configured. No credentials are printed or stored by the application.
+
+`ask` prints the answer, provider/model, and retrieved citation IDs/titles. The evaluator reports overall and per-category recall@5, MRR, fact accuracy, citation validity, conflict handling, abstention accuracy, latency, and LLM calls, followed by every failed case.
 
 ## Phase 1 limitations
 
