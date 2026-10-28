@@ -15,7 +15,7 @@ from .memory import MemoryStore
 from .research import run_research
 from .graph import run_improved_research
 from .retrieval import HybridRetriever
-from .observability import export_representative_traces, maybe_upload
+from .observability import export_langsmith_traces, export_representative_traces, maybe_upload
 from .reporting import publish_results, render_eval
 
 
@@ -39,6 +39,7 @@ def main() -> None:
         print(f"Loaded {len(load_corpus(settings.corpus_path))} corpus chunks.")
     elif args.command == "export-traces":
         print(export_representative_traces(Path("docs/trace_exports")))
+        print(export_langsmith_traces(Path("docs/trace_exports")) or "LangSmith live trace export skipped.")
         print(maybe_upload(Path("eval/datasets/research.jsonl")))
     elif args.command == "publish-results":
         for report in publish_results():
