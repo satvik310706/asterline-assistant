@@ -3,6 +3,8 @@ from pathlib import Path
 
 from asterline_assistant.config import Settings
 from asterline_assistant.memory_eval import run_memory_eval
+from asterline_assistant.memory import Clock, MemoryStore
+from datetime import datetime, timezone
 
 
 def test_memory_dataset_fake_has_no_isolation_or_secret_leaks(tmp_path: Path, monkeypatch) -> None:
@@ -19,3 +21,12 @@ def test_memory_dataset_fake_has_no_isolation_or_secret_leaks(tmp_path: Path, mo
     report = json.loads(result_path.read_text(encoding="utf-8"))
     assert report["isolation_leakage"] == 0
     assert report["secret_leak_count"] == 0
+
+
+def test_memory_ttl_drill_uses_injected_clock(tmp_path: Path) -> None:
+    clock = Clock(datetime(2026, 1, 1, tzinfo=timezone.utc))
+    store = MemoryStore(tmp_path / "memory.sqlite3", clock=clock)
+    store.write_explicit("alice", "I am investigating the launch rollout")
+    clock.advance_days(15)
+    assert store.expire("alice", memory_type="project", max_age_days=14) == 1
+    assert store.list_active("alice") == []

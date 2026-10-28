@@ -115,6 +115,17 @@ class MemoryStore:
     def active_memory_text(self, user_id: str) -> list[str]:
         return [f"{record.type}: {record.content}" for record in self.list_active(user_id)]
 
+    def expire(self, user_id: str, *, memory_type: str, max_age_days: int) -> int:
+        """Hard-delete stale memories of one type using the injectable clock."""
+        cutoff = self.clock.now() - timedelta(days=max_age_days)
+        rows = self.connection.execute(
+            "SELECT id FROM memories WHERE user_id = ? AND type = ? AND status = 'active' AND updated_at < ?",
+            (user_id, memory_type, cutoff.isoformat()),
+        ).fetchall()
+        for row in rows:
+            self.delete_memory(user_id, int(row["id"]))
+        return len(rows)
+
     def dump_memory_tables(self) -> str:
         return "\n".join(" | ".join(str(value) for value in row) for table in ("memories", "memory_vectors") for row in self.connection.execute(f"SELECT * FROM {table}").fetchall())
 

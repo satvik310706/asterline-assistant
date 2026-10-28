@@ -22,8 +22,8 @@ def route(question: str, history: list[HistoryMessage] | None = None) -> str:
 
 
 @traced("retriever")
-def retrieve(query: str, retriever: HybridRetriever) -> EvidencePack:
-    return EvidencePack(query=query, chunks=retriever.search(query, k=5))
+def retrieve(query: str, retriever: HybridRetriever, k: int = 5) -> EvidencePack:
+    return EvidencePack(query=query, chunks=retriever.search(query, k=k))
 
 
 def build_evidence(pack: EvidencePack) -> EvidencePack:
