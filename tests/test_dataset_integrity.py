@@ -6,7 +6,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    raw = path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n").replace(b"\n", b"\r\n")
+    return hashlib.sha256(raw).hexdigest()
 
 
 def test_immutable_dataset_hashes() -> None:
