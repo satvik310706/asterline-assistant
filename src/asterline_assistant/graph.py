@@ -112,6 +112,11 @@ def evidence_analyst_agent(state: GraphState) -> GraphState:
 
 @traced("answer_writer")
 def answer_writer_agent(state: GraphState) -> GraphState:
+    if state["router"].intent == "chitchat":
+        return {"response": ResearchResponse(
+            answer="Hi! I can help with Asterline's plans, APIs, incidents, and policies. What would you like to know?",
+            evidence=[], provider="rules", model="deterministic",
+        )}
     records = state["memory_reader"].records
     query_terms = {term for term in tokenize(state["question"]) if len(term) > 3}
     relevant_memory = any(query_terms.intersection(tokenize(record.content)) for record in records)
@@ -153,11 +158,11 @@ def _build_graph():
     graph.add_node("verifier", verifier_agent)
     graph.add_node("memory_writer", memory_writer_agent)
     graph.set_entry_point("router")
-    graph.add_edge("router", "memory_reader")
+    graph.add_conditional_edges("router", lambda state: "chitchat" if state["router"].intent == "chitchat" else "research", {"chitchat": "answer_writer", "research": "memory_reader"})
     graph.add_edge("memory_reader", "retriever")
     graph.add_edge("retriever", "evidence_analyst")
     graph.add_edge("evidence_analyst", "answer_writer")
-    graph.add_edge("answer_writer", "verifier")
+    graph.add_conditional_edges("answer_writer", lambda state: "done" if state["router"].intent == "chitchat" else "verify", {"done": END, "verify": "verifier"})
     graph.add_edge("verifier", "memory_writer")
     graph.add_edge("memory_writer", END)
     return graph.compile()

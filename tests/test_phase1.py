@@ -140,6 +140,18 @@ def test_gemini_retries_503_with_bounded_backoff() -> None:
     assert result.attempts == 2
 
 
+def test_resilient_provider_reports_live_gemini_retry_status() -> None:
+    messages: list[str] = []
+    primary = GeminiLLM("test", sleep_fn=lambda _: None, random_fn=lambda: 0.0)
+    primary.client = FakeGeminiClient([FakeAPIError(503), answer_payload()])
+    fallback = OllamaLLM("local", request_fn=lambda _: "unused")
+    provider = ResilientLLM(primary, fallback)
+    provider.status_callback = messages.append
+    provider.answer("q", EvidencePack(query="q", chunks=[]))
+    assert any("Gemini request" in item for item in messages)
+    assert any("retrying in" in item for item in messages)
+
+
 def test_gemini_honors_retry_after() -> None:
     sleeps: list[float] = []
     provider = GeminiLLM("test", sleep_fn=sleeps.append, random_fn=lambda: 0.0)
@@ -288,6 +300,19 @@ def test_provider_diagnostics_keep_generic_quota_class_when_detail_is_truncated(
     assert error.quota_type == "quota"
 
 
+def test_exhausted_gemini_quota_falls_back_without_long_retry_wait() -> None:
+    sleeps: list[float] = []
+    provider = GeminiLLM("test", sleep_fn=sleeps.append, max_attempts=5)
+    error = FakeAPIError(429)
+    error.args = ("429 RESOURCE_EXHAUSTED: You exceeded your current quota",)
+    provider.client = FakeGeminiClient([error])
+    with pytest.raises(ProviderFailure) as failure:
+        provider.answer("q", EvidencePack(query="q", chunks=[]))
+    assert failure.value.quota_type == "quota"
+    assert provider.client.calls == 1
+    assert sleeps == []
+
+
 def test_abstention_without_citations_is_valid() -> None:
     chunk = load_corpus(ROOT / "data/corpus.jsonl")[0]
     provider = GeminiLLM("test", max_attempts=1)
@@ -339,6 +364,15 @@ def test_parser_normalizes_bare_ollama_source_header_captured_from_real_run() ->
     raw_reply = f"The fact is documented.  SOURCE {chunk.chunk_id} | {chunk.title}"
     draft = parse_text_answer(raw_reply, EvidencePack(query="q", chunks=[{"chunk": chunk}]), attempt=1, degraded=True)
     assert f"[{chunk.chunk_id} — {chunk.title}]" in draft.answer
+    assert draft.cited_chunk_ids == [chunk.chunk_id]
+
+
+def test_parser_deduplicates_ollama_source_suffix() -> None:
+    chunk = load_corpus(ROOT / "data/corpus.jsonl")[0]
+    raw = f"Grounded answer [{chunk.chunk_id} — {chunk.title}]. (SOURCE {chunk.chunk_id} | {chunk.title})"
+    draft = parse_text_answer(raw, EvidencePack(query="q", chunks=[{"chunk": chunk}]), attempt=1, degraded=True)
+    assert draft.answer.count(f"[{chunk.chunk_id} — {chunk.title}]") == 1
+    assert "SOURCE" not in draft.answer
     assert draft.cited_chunk_ids == [chunk.chunk_id]
 
 

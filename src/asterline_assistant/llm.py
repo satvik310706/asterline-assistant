@@ -99,10 +99,18 @@ def classify_failure(error: Exception, attempts: int = 0) -> ProviderFailure:
     code = _status_code(error)
     detail = _sanitize(str(error)) or "provider request failed"
     config_error = code in CONFIG_CODES or any(marker in detail.lower() for marker in CONFIG_MARKERS)
-    transient = not config_error and (code in TRANSIENT_CODES or isinstance(error, TimeoutError) or "timeout" in error.__class__.__name__.lower())
-    message = "Gemini rejected the model/key: check GEMINI_MODEL and your key." if config_error else "provider request failed"
+    retry_after = _retry_after(error)
     quota_type = "per-day" if re.search(r"per[- ]day|daily quota|daily limit|day limit", detail, re.IGNORECASE) else ("per-minute" if re.search(r"per[- ]minute|per minute|minute quota|rpm", detail, re.IGNORECASE) else ("quota" if re.search(r"resource_exhausted|current quota|quota", detail, re.IGNORECASE) else None))
-    return ProviderFailure(message, error_class=error.__class__.__name__, transient=transient, status_code=code, retry_after=_retry_after(error), quota_type=quota_type, attempts=attempts, detail=detail)
+    # Exhausted plan/day quotas will not recover during a single UI turn. Avoid
+    # burning minutes on repeated 429s; true rate-limit 429s still honor the hint.
+    exhausted_quota = code == 429 and (
+        quota_type == "per-day"
+        or bool(re.search(r"exceeded your current quota|quota exhausted|daily (?:quota|limit)|per[- ]day", detail, re.IGNORECASE))
+        or (quota_type == "quota" and retry_after is None)
+    )
+    transient = not config_error and not exhausted_quota and (code in TRANSIENT_CODES or isinstance(error, TimeoutError) or "timeout" in error.__class__.__name__.lower())
+    message = "Gemini rejected the model/key: check GEMINI_MODEL and your key." if config_error else "provider request failed"
+    return ProviderFailure(message, error_class=error.__class__.__name__, transient=transient, status_code=code, retry_after=retry_after, quota_type=quota_type, attempts=attempts, detail=detail)
 
 
 def _sanitize(value: str) -> str:
@@ -123,7 +131,13 @@ def _extract_citations(text: str) -> tuple[str, list[tuple[str, str]]]:
     pipe_pattern = re.compile(r"\[(?:SOURCE\s+)?([^\s|—\]]+)\s*\|\s*([^\]]+)\]", re.IGNORECASE)
     pipe_pairs = pipe_pattern.findall(text)
     normalized = pipe_pattern.sub(lambda match: f"[{match.group(1)} — {match.group(2).strip()}]", text)
-    bare_source_pattern = re.compile(r"(?im)(?<!\S)SOURCE\s+([^\s|]+)\s*\|\s*([^\r\n]+?)\s*$")
+    source_parenthetical = re.compile(r"\(\s*SOURCE\s+([^\s|]+)\s*\|\s*([^)]*?)\s*\)", re.IGNORECASE)
+    existing = set(pairs + pipe_pairs)
+    normalized = source_parenthetical.sub(
+        lambda match: "" if (match.group(1), match.group(2).strip()) in existing
+        else f"[{match.group(1)} — {match.group(2).strip()}]", normalized,
+    )
+    bare_source_pattern = re.compile(r"(?im)(?<![\w\[])SOURCE\s+([^\s|]+)\s*\|\s*([^\r\n)]+?)\s*$")
     bare_source_pairs = bare_source_pattern.findall(normalized)
     normalized = bare_source_pattern.sub(lambda match: f"[{match.group(1)} — {match.group(2).strip()}]", normalized)
     return normalized, pairs + pipe_pairs + bare_source_pairs
@@ -151,6 +165,11 @@ class LLMProvider:
     def __init__(self) -> None:
         self.calls = 0
         self.last_metadata: dict[str, str | int | bool | None] = {}
+        self.status_callback: Callable[[str], None] | None = None
+
+    def report_status(self, message: str) -> None:
+        if self.status_callback is not None:
+            self.status_callback(message)
 
     def answer(self, question: str, evidence: EvidencePack) -> AnswerDraft:
         raise NotImplementedError
@@ -202,6 +221,7 @@ class GeminiLLM(LLMProvider):
         parse_retries = 0
         for attempt in range(1, self.max_attempts + 1):
             self.calls += 1
+            self.report_status(f"Gemini request · attempt {attempt}/{self.max_attempts}")
             try:
                 instruction = prompt if parse_retries == 0 else f"{prompt}\nReturn only a short plain-text answer and valid citations; do not use JSON or Markdown fences."
                 response = self.client.models.generate_content(model=self.model, contents=instruction, config={"temperature": 0})
@@ -217,6 +237,7 @@ class GeminiLLM(LLMProvider):
             except Exception as error:
                 failure = classify_failure(error, attempts=attempt)
                 if not failure.transient:
+                    self.report_status("Gemini quota/configuration limit · switching to local fallback")
                     raise failure from None
                 if attempt == self.max_attempts:
                     self.breaker.record_transient_failure()
@@ -228,6 +249,7 @@ class GeminiLLM(LLMProvider):
                     self.breaker.record_transient_failure()
                     failure.attempts = attempt
                     raise failure from None
+                self.report_status(f"Gemini busy · retrying in {delay:.0f}s")
                 self.sleep_fn(delay)
                 waited += delay
         raise ProviderFailure("Gemini request failed", error_class="RetryExhausted", transient=True, attempts=self.max_attempts)
@@ -258,6 +280,7 @@ class OllamaLLM(LLMProvider):
         self.request_fn = request_fn or self._request
 
     def answer(self, question: str, evidence: EvidencePack) -> AnswerDraft:
+        self.report_status("Ollama local fallback · generating and checking citations")
         context = "\n".join(f"SOURCE {x.chunk.chunk_id} | {x.chunk.title}\n{x.chunk.text}" for x in evidence.chunks)
         example = f"Example citation using an actual source: [{evidence.chunks[0].chunk.chunk_id} — {evidence.chunks[0].chunk.title}]" if evidence.chunks else "If there is no evidence, say you cannot answer."
         errors: list[ProviderFailure] = []
@@ -315,6 +338,7 @@ class ResilientLLM(LLMProvider):
         self.model = primary.model
 
     def answer(self, question: str, evidence: EvidencePack) -> AnswerDraft:
+        self.primary.status_callback = self.status_callback
         try:
             draft = self.primary.answer(question, evidence)
             self.calls = self.primary.calls
@@ -324,6 +348,7 @@ class ResilientLLM(LLMProvider):
             if primary_error.quality:
                 return AnswerDraft(answer=primary_error.raw_reply or str(primary_error), error_class=primary_error.error_class, attempts=primary_error.attempts, trace_metadata={"provider": self.primary.name, "model": self.primary.model, "attempts": primary_error.attempts, "degraded": False, "error_class": primary_error.error_class})
             try:
+                self.fallback.status_callback = self.status_callback
                 draft = self.fallback.answer(question, evidence)
                 self.calls = self.primary.calls + self.fallback.calls
                 self.name, self.model = self.fallback.name, self.fallback.model

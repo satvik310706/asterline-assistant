@@ -38,3 +38,18 @@ def test_improved_graph_emits_completed_node_timings(tmp_path: Path) -> None:
     )
     assert [node for node, _ in events] == ["router", "memory_reader", "retriever", "evidence_analyst", "answer_writer", "verifier", "memory_writer"]
     assert all(elapsed >= 0 for _, elapsed in events)
+
+
+def test_chitchat_skips_retrieval_and_llm(tmp_path: Path) -> None:
+    events: list[tuple[str, float]] = []
+    provider = FakeLLM()
+    response = run_improved_research(
+        "hi", "alice", OneChunkRetriever(), provider, MemoryStore(tmp_path / "memory.sqlite3"),
+        on_step=lambda node, elapsed: events.append((node, elapsed)),
+    )
+    assert "What would you like to know?" in response.answer
+    assert response.evidence == []
+    assert response.provider == "rules"
+    assert response.model == "deterministic"
+    assert provider.calls == 0
+    assert [node for node, _ in events] == ["router", "answer_writer"]

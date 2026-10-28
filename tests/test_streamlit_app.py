@@ -32,6 +32,16 @@ def test_streamlit_app_starts_in_fake_mode(monkeypatch) -> None:
     assert any("No active memories" in str(widget.value) for widget in app.caption)
 
 
+def test_new_session_stays_selected_until_first_message(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("ASTERLINE_SQLITE_PATH", str(tmp_path / "sessions.sqlite3"))
+    app = AppTest.from_file(ROOT / "app" / "streamlit_app.py").run(timeout=30)
+    previous = app.session_state["session_id"]
+    next(button for button in app.button if button.label == "New session").click().run(timeout=30)
+    assert app.session_state["session_id"] != previous
+    assert app.selectbox[3].value == app.session_state["session_id"]
+
+
 def test_streamlit_chat_remember_and_user_isolation(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.setenv("ASTERLINE_SQLITE_PATH", str(tmp_path / "ui.sqlite3"))
@@ -54,7 +64,7 @@ def test_streamlit_fake_question_shows_citation_evidence(monkeypatch, tmp_path: 
     app.chat_input[0].set_value("What is the current Launch ingestion rate?")
     app.run(timeout=60)
     assert not app.exception
-    rendered = " ".join(str(widget.value) for widget in app.markdown)
+    rendered = " ".join(str(widget.value) for widget in [*app.markdown, *app.caption])
     assert "300" in rendered
     assert any("Evidence & citations" in str(widget.label) for widget in app.expander)
 
@@ -69,4 +79,20 @@ def test_streamlit_improved_mode_runs_agent_graph(monkeypatch, tmp_path: Path) -
     app.run(timeout=60)
     assert not app.exception
     assert "300" in " ".join(str(widget.value) for widget in app.markdown)
+    assert any("Agents complete" in str(widget.label) for widget in app.status)
+
+
+def test_streamlit_improved_greeting_uses_short_chitchat_path(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("ASTERLINE_SQLITE_PATH", str(tmp_path / "greeting-ui.sqlite3"))
+    monkeypatch.setenv("ASTERLINE_CONFIG", "improved")
+    app = AppTest.from_file(ROOT / "app" / "streamlit_app.py").run(timeout=30)
+    app.selectbox[2].set_value("fake")
+    app.chat_input[0].set_value("hello")
+    app.run(timeout=30)
+    assert not app.exception
+    rendered = " ".join(str(widget.value) for widget in [*app.markdown, *app.caption])
+    assert "What would you like to know?" in rendered
+    assert "rules/deterministic" in rendered
+    assert "on-call runbook" not in rendered
     assert any("Agents complete" in str(widget.label) for widget in app.status)

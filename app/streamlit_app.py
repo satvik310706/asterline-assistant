@@ -48,6 +48,13 @@ def _store() -> MemoryStore:
     return MemoryStore(Settings.from_environment().sqlite_path)
 
 
+def _new_session() -> None:
+    session_id = uuid.uuid4().hex
+    st.session_state.session_id = session_id
+    # Set the widget's selection in its callback, before Streamlit constructs it.
+    st.session_state.resume_session = session_id
+
+
 def _render_memory_panel(store: MemoryStore, user_id: str) -> None:
     st.subheader("Memory panel")
     st.caption("Memory is user context, not company evidence.")
@@ -85,7 +92,11 @@ def main() -> None:
       .asterline-kicker { color:#2fbf8f; font:600 0.72rem ui-monospace,monospace; letter-spacing:.12em; text-transform:uppercase; }
       .asterline-muted { color:#8b8b8b; }
       code, .stCode { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; }
-      div[data-testid="stChatMessage"] { border:1px solid #2a2a2a; border-radius:10px; margin:.5rem 0; }
+      div[data-testid="stChatMessage"] { border:1px solid #2a2a2a; border-radius:10px; margin:.65rem 0; padding:.3rem .45rem; }
+      div[data-testid="stChatMessageContent"] { font-size:1rem; line-height:1.65; }
+      [data-testid="stChatInput"] textarea { font-size:1rem !important; }
+      [data-testid="stToolbar"] { visibility:hidden; }
+      h1 { letter-spacing:-.025em; }
       @media (prefers-reduced-motion: no-preference) { div[data-testid="stChatMessage"] { animation:fade-in .18s ease-out; } @keyframes fade-in { from{opacity:.4;transform:translateY(2px)} to{opacity:1;transform:none} } }
     </style>
     """, unsafe_allow_html=True)
@@ -95,46 +106,54 @@ def main() -> None:
         st.session_state.user = "alice"
     if "session_id" not in st.session_state:
         st.session_state.session_id = uuid.uuid4().hex
+    if "resume_session" not in st.session_state:
+        st.session_state.resume_session = st.session_state.session_id
+    # The improved pipeline is the interactive default; baseline remains one click away.
+    st.session_state.setdefault("ui_config", os.getenv("ASTERLINE_CONFIG", "improved").lower())
     with st.sidebar:
         st.markdown('<div class="asterline-kicker">Asterline Labs · research system</div>', unsafe_allow_html=True)
-        st.title("Research assistant")
+        st.title("Research controls")
         user_id = st.selectbox("User", ["alice", "bob", "carol"], index=["alice", "bob", "carol"].index(st.session_state.user))
         if user_id != st.session_state.user:
             st.session_state.user = user_id
             st.session_state.session_id = uuid.uuid4().hex
+            st.session_state.resume_session = st.session_state.session_id
             st.rerun()
-        config = st.selectbox("Config", ["baseline", "improved"], index=1 if settings.config == "improved" else 0)
+        config = st.selectbox("Config", ["baseline", "improved"], key="ui_config")
         provider_name = st.selectbox("Provider", ["fake", "gemini", "ollama"], index=0 if not os.getenv("GEMINI_API_KEY") else 1)
         if provider_name == "fake":
             st.info("DEMO MODE · deterministic FakeLLM")
         elif provider_name == "gemini" and not os.getenv("GEMINI_API_KEY"):
             st.warning("No Gemini key configured — switch to FakeLLM for offline demo mode.")
         else:
-            st.success(f"{provider_name} ready")
+            st.caption(f"{provider_name} selected · availability checked on request")
         sessions = store.list_sessions(st.session_state.user)
-        if sessions:
-            selected_session = st.selectbox("Resume session", sessions, format_func=lambda value: value[:8])
-            if selected_session != st.session_state.session_id:
-                st.session_state.session_id = selected_session
-                st.rerun()
-        if st.button("New session"):
-            st.session_state.session_id = uuid.uuid4().hex
+        if st.session_state.session_id not in sessions:
+            sessions.insert(0, st.session_state.session_id)
+        selected_session = st.selectbox("Resume session", sessions, format_func=lambda value: value[:8], key="resume_session")
+        if selected_session != st.session_state.session_id:
+            st.session_state.session_id = selected_session
             st.rerun()
+        st.button("New session", on_click=_new_session)
         with st.expander("Memory panel", expanded=True):
             _render_memory_panel(store, st.session_state.user)
     st.markdown('<div class="asterline-kicker">grounded answers · durable user context · explicit uncertainty</div>', unsafe_allow_html=True)
-    st.title("Ask the supplied knowledge base")
+    st.title("Asterline Research Assistant")
     st.caption("Company facts come from retrieved corpus evidence. Saved context is never evidence.")
     messages = store.history(st.session_state.session_id)
     for message in messages:
-        with st.chat_message(message["role"]):
+        with st.chat_message(message["role"], avatar="👤" if message["role"] == "user" else "🔎"):
             st.markdown(message["content"])
+    if not messages:
+        st.markdown("### Ask a grounded question")
+        st.caption("Try: “What is the current Launch ingestion rate?” or “What is the Enterprise list price?”")
     question = st.chat_input("Ask about the supplied corpus")
     if question:
         store.record_message(st.session_state.user, st.session_state.session_id, "user", question)
-        with st.chat_message("user"):
+        with st.chat_message("user", avatar="👤"):
             st.markdown(question)
         try:
+            st.caption("Answer is shown after citation checks; provider and agent progress update while it runs.")
             with st.status("Running agents", expanded=True) as activity:
                 agents = ["router", "memory_reader", "retriever", "evidence_analyst", "answer_writer", "verifier", "memory_writer"] if config == "improved" else ["router", "retriever", "answer_writer"]
                 timeline = {agent: st.empty() for agent in agents} if config == "improved" else {}
@@ -145,17 +164,28 @@ def main() -> None:
                 validate_corpus_integrity(settings.corpus_path)
                 retriever = HybridRetriever(load_corpus(settings.corpus_path), settings.chroma_path, settings.fastembed_cache_path)
                 provider = make_provider(provider_name, settings.gemini_model, settings.ollama_model)
+                provider_progress = st.empty()
+                provider.status_callback = lambda message: provider_progress.caption(message)
                 settings = settings.model_copy(update={"config": config})
                 history = [*messages, {"role": "user", "content": question}]
                 history_models = [type("History", (), item) for item in history]
                 fn = run_improved_research if config == "improved" else run_research
                 if config == "improved":
                     def on_agent_step(agent: str, elapsed: float) -> None:
-                        agent_index = agents.index(agent)
-                        timeline[agent].write(f"● {agent} · done · {elapsed:.2f}s")
-                        if agent_index + 1 < len(agents):
-                            next_agent = agents[agent_index + 1]
-                            timeline[next_agent].write(f"◉ {next_agent} · running")
+                        chitchat = question.strip().lower() in {"hi", "hello", "thanks", "thank you"}
+                        path = ["router", "answer_writer"] if chitchat else agents
+                        agent_index = path.index(agent)
+                        for index, name in enumerate(path):
+                            if index < agent_index:
+                                timeline[name].write(f"● {name} · done")
+                            elif index == agent_index:
+                                timeline[name].write(f"● {name} · done · {elapsed:.2f}s")
+                            elif index == agent_index + 1:
+                                timeline[name].write(f"◉ {name} · running")
+                            else:
+                                timeline[name].write(f"○ {name} · pending")
+                        for name in set(agents) - set(path):
+                            timeline[name].write(f"– {name} · skipped (chitchat) ")
                     response = fn(question, st.session_state.user, retriever, provider, store, history=history_models, on_step=on_agent_step)
                 else:
                     st.write("Baseline path · hybrid retrieval → citation-checked answer")
@@ -169,11 +199,15 @@ def main() -> None:
         if response is None:
             st.stop()
         store.record_message(st.session_state.user, st.session_state.session_id, "assistant", response.answer)
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar="🔎"):
             st.markdown(response.answer)
             st.caption(f"{response.provider}/{response.model}" + (" · degraded" if response.degraded else ""))
             if response.degraded:
-                st.warning("Degraded mode: provider fallback or source-only response was used.")
+                st.warning("Degraded mode: Gemini was unavailable; this answer came from the local fallback. Verify the cited evidence below.")
+                if response.primary_error:
+                    st.caption(response.primary_error)
+                if response.fallback_error:
+                    st.caption(response.fallback_error)
             with st.expander("Evidence & citations"):
                 for item in response.evidence:
                     st.write(f"`{item.chunk.chunk_id}` — {item.chunk.title} · {item.chunk.published} · v{item.chunk.version}")
