@@ -49,7 +49,8 @@ Status is updated after each deliverable with what works, verification commands,
   - Not verified: successful remote upload/live trace capture; external credentials and Gemini quota were unavailable for a clean end-to-end run.
 - [x] 5.5 live Streamlit health check attempted; environment rejected both PTY and hidden background process creation (`Access is denied`). Existing AppTest startup coverage remains verified.
 - [x] 5.6 full repository pytest verification: 45 passed in 309.96s.
-  - Not verified: fresh-clone harness and live Gemini/LangSmith remote runs remain environment/account dependent.
+  - Fresh-clone hardening later passed: `47 passed`, dataset hashes, FakeLLM smoke, and secret scan (synthetic fixture paths excluded explicitly).
+  - Not verified: live Gemini/LangSmith remote runs remain environment/account dependent.
 
 ## Phase 6 walkthrough readiness
 
@@ -61,3 +62,4 @@ Status is updated after each deliverable with what works, verification commands,
 
 - [x] Added `uv run asterline build-submission`, which reads `eval/final/*.json` and generates `SUBMISSION.md` and `SUBMISSION.pdf`.
 - [x] Added a generation test; repository/trace URLs remain explicit author-fill placeholders.
+- [x] Fresh-clone hardening rerun passed after the synthetic-fixture scanner correction.

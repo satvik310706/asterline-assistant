@@ -1,0 +1,211 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 2731 >>
+stream
+BT
+/F1 9 Tf
+45 760 Td
+(# Asterline Assistant ? Take-home submission) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Repository: [PASTEREPOSITORYURLHERE]) Tj
+0 -15 Td
+(LangSmith traces: [PASTESHAREDTRACELINKSHERE]) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(## Executive summary) Tj
+0 -15 Td
+(A research assistant that answers only from an immutable corpus, cites evidence,) Tj
+0 -15 Td
+(handles supersession and abstention, and remembers safe user context across restarts.) Tj
+0 -15 Td
+(The baseline is frozen; the improved configuration adds seven typed agent stages.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(## Reproduction) Tj
+0 -15 Td
+(uv sync) Tj
+0 -15 Td
+(uv run pytest -q) Tj
+0 -15 Td
+(uv run asterline ask "What is the current Launch ingestion rate?" --provider fake) Tj
+0 -15 Td
+(uv run asterline run) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(## Generated evaluation artifacts) Tj
+0 -15 Td
+(baselinefake.json: provider=fake config=baseline cases=80) Tj
+0 -15 Td
+(  retrievalrecallat5: 0.9743589743589743 \(78/80 applicable\)) Tj
+0 -15 Td
+(  mrr: 0.7653846153846156 \(78/80 applicable\)) Tj
+0 -15 Td
+(  factaccuracy: 0.725 \(80/80 applicable\)) Tj
+0 -15 Td
+(  citationvalidity: 1.0 \(80/80 applicable\)) Tj
+0 -15 Td
+(  citationprecision: 0.5961538461538461 \(78/80 applicable\)) Tj
+0 -15 Td
+(  citationrecall: 0.8076923076923077 \(78/80 applicable\)) Tj
+0 -15 Td
+(  conflicthandling: 0.42857142857142855 \(7/80 applicable\)) Tj
+0 -15 Td
+(  abstentionaccuracy: 0.9125 \(80/80 applicable\)) Tj
+0 -15 Td
+(  fallbackfraction: 0.0 \(80/80 applicable\)) Tj
+0 -15 Td
+(improvedfake.json: provider=fake config=improved cases=80) Tj
+0 -15 Td
+(  retrievalrecallat5: 0.9743589743589743 \(78/80 applicable\)) Tj
+0 -15 Td
+(  mrr: 0.758974358974359 \(78/80 applicable\)) Tj
+0 -15 Td
+(  factaccuracy: 0.7 \(80/80 applicable\)) Tj
+0 -15 Td
+(  citationvalidity: 1.0 \(80/80 applicable\)) Tj
+0 -15 Td
+(  citationprecision: 0.5833333333333334 \(78/80 applicable\)) Tj
+0 -15 Td
+(  citationrecall: 0.7756410256410257 \(78/80 applicable\)) Tj
+0 -15 Td
+(  conflicthandling: 0.42857142857142855 \(7/80 applicable\)) Tj
+0 -15 Td
+(  abstentionaccuracy: 0.9125 \(80/80 applicable\)) Tj
+0 -15 Td
+(  fallbackfraction: 0.0 \(80/80 applicable\)) Tj
+0 -15 Td
+(memoryfake.json: provider=fake config=None cases=None) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(## Evidence and memory guarantees) Tj
+0 -15 Td
+(Citations are parsed and validated against retrieved chunks. Memory is labelled) Tj
+0 -15 Td
+(unverified context and never counts as company evidence. Secrets and sensitive) Tj
+0 -15 Td
+(personal data are redacted or rejected before storage and tracing. SQLite is the) Tj
+0 -15 Td
+(source of truth; hard delete removes memory rows, vectors, sessions, and messages.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(## Limitations) Tj
+0 -15 Td
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 1690 >>
+stream
+BT
+/F1 9 Tf
+45 760 Td
+(FakeLLM reports verify plumbing, not provider quality. Gemini quality runs and) Tj
+0 -15 Td
+(remote LangSmith links require the author's credentials and quota. Deleted data) Tj
+0 -15 Td
+(may remain in already-shipped remote traces. Regex matching is a rough metric.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(## AI use disclosure) Tj
+0 -15 Td
+(# AI use disclosure) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(- Codex \(GPT\) wrote most code under my direction.) Tj
+0 -15 Td
+(- Claude helped with planning, datasets, and prompts.) Tj
+0 -15 Td
+(- Tests and evaluation runners were used to verify behavior and expose failures.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(## Author edits) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Add any additional tools, prompts, or review details here before submission.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(## Design excerpt) Tj
+0 -15 Td
+(# Design) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(mermaid) Tj
+0 -15 Td
+(flowchart LR) Tj
+0 -15 Td
+(  Q[User question] --> R[router]) Tj
+0 -15 Td
+(  R --> M[memoryreader\\nUNVERIFIED USER CONTEXT]) Tj
+0 -15 Td
+(  R --> S[retriever\\nhybrid dense + BM25]) Tj
+0 -15 Td
+(  S --> A[evidenceanalyst\\ncurrent/superseded]) Tj
+0 -15 Td
+(  M --> W[answerwriter]) Tj
+0 -15 Td
+(  A --> W) Tj
+0 -15 Td
+(  W --> V[verifier]) Tj
+0 -15 Td
+(  V --> MW[memorywriter\\npolicy gate]) Tj
+0 -15 Td
+(  MW --> DB[\(SQLite user memory\)]) Tj
+0 -15 Td
+(  A --> C[\(Chroma corpus index\)]) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Baseline keeps the original route ? retrieve ? answer path frozen. Improved uses seven named graph nodes. Corp) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Trade-offs: deterministic policy and validation are easier to explain than a fully autonomous agent, but FakeL) Tj
+0 -15 Td
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000003030 00000 n 
+0000003156 00000 n 
+0000004898 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+4968
+%%EOF
