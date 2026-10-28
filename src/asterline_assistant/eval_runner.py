@@ -15,7 +15,7 @@ from typing import Any
 
 from .config import Settings
 from .corpus import load_corpus, validate_corpus_integrity
-from .llm import ProviderFailure, ResilientLLM, make_provider
+from .llm import ProviderFailure, ResilientLLM, format_failure, make_provider
 from .memory import MemoryStore
 from .models import AnswerDraft, EvidencePack, HistoryMessage, ResearchResponse
 from .research import build_evidence, retrieve, route, run_research
@@ -119,7 +119,7 @@ def _case_result(row: dict[str, Any], response: ResearchResponse, status: str, e
             "conflict_handling": float(conflict) if conflict is not None else None,
             "abstention_accuracy": float(response.abstained == (row.get("expected") == "abstain")),
         }
-    return {"id": row["id"], "category": row["category"], "question": row["question"], "answer": response.answer, "status": status, "cited": [{"chunk_id": chunk_id, "title": title} for chunk_id, title in cited], "retrieved_not_cited": [chunk_id for chunk_id in retrieved if chunk_id not in cited_ids], "retrieved_chunk_ids": retrieved, "provider": response.provider, "model": response.model, "degraded": response.degraded, "provider_error": response.provider_error, "error_class": response.error_class, "primary_error": response.primary_error, "fallback_error": response.fallback_error, "checks": checks, "latency_ms": elapsed_ms, "llm_calls": calls}
+    return {"id": row["id"], "category": row["category"], "question": row["question"], "answer": response.answer, "status": status, "cited": [{"chunk_id": chunk_id, "title": title} for chunk_id, title in cited], "retrieved_not_cited": [chunk_id for chunk_id in retrieved if chunk_id not in cited_ids], "retrieved_chunk_ids": retrieved, "provider": response.provider, "model": response.model, "degraded": response.degraded, "provider_error": response.provider_error, "error_class": response.error_class, "error_status": response.error_status, "quota_type": response.quota_type, "retry_after": response.retry_after, "primary_error": response.primary_error, "fallback_error": response.fallback_error, "checks": checks, "latency_ms": elapsed_ms, "llm_calls": calls}
 
 
 def _summary(case_results: list[dict[str, Any]], rows: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
@@ -131,7 +131,7 @@ def _summary(case_results: list[dict[str, Any]], rows: list[dict[str, Any]]) -> 
     by_category: dict[str, dict[str, Any]] = {}
     for category in sorted({result["category"] for result in case_results}):
         by_category[category] = {metric: metric_summary([result for result in case_results if result["category"] == category], metric) for metric in metrics}
-    provider_errors = [{"id": result["id"], "category": result["category"], "provider": result["provider"], "error_class": result.get("error_class"), "primary_error": result.get("primary_error"), "fallback_error": result.get("fallback_error"), "reason": "language model providers unavailable"} for result in case_results if result["status"] == "provider_error"]
+    provider_errors = [{"id": result["id"], "category": result["category"], "provider": result["provider"], "error_class": result.get("error_class"), "status": result.get("error_status"), "quota_type": result.get("quota_type"), "retry_after": result.get("retry_after"), "primary_error": result.get("primary_error"), "fallback_error": result.get("fallback_error"), "reason": "language model providers unavailable"} for result in case_results if result["status"] == "provider_error"]
     eval_errors = [{"id": result["id"], "category": result["category"], "error_class": result.get("error_class"), "message": result.get("error_message", "evaluation case failed")} for result in case_results if result["status"] == "eval_error"]
     failures = [{"id": result["id"], "category": result["category"], "failed": [metric for metric, value in result["checks"].items() if value is not None and not value], "reason": "one or more deterministic checks failed"} for result in case_results if result["status"] in {"ok", "quality_error"} and any(value is not None and not value for value in result["checks"].values())]
     providers: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
@@ -227,7 +227,11 @@ def run(dataset: Path, settings: Settings, limit: int | None = None, skip_prefli
             except ProviderFailure as error:
                 error_class, error_message = _safe_error(error)
                 status = "quality_error" if error.quality else "provider_error"
-                response = _source_only_response(evidence if "evidence" in locals() else EvidencePack(query=row["question"], chunks=[]), provider.name, provider.model, error_class, not error.quality, getattr(error, "primary_error", None), getattr(error, "fallback_error", None))
+                primary = format_failure(provider.name, provider.model, error, "primary") if isinstance(error, ProviderFailure) else None
+                response = _source_only_response(evidence if "evidence" in locals() else EvidencePack(query=row["question"], chunks=[]), provider.name, provider.model, error_class, not error.quality, primary, getattr(error, "fallback_error", None))
+                response.error_status = getattr(error, "status_code", None)
+                response.quota_type = getattr(error, "quota_type", None)
+                response.retry_after = getattr(error, "retry_after", None)
             except Exception as error:
                 status = "eval_error"
                 error_class, error_message = _safe_error(error)

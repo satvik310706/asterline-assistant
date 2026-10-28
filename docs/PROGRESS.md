@@ -39,3 +39,12 @@
 ## Verification notes
 
 Status is updated after each deliverable with what works, verification commands, and remaining gaps.
+
+## Phase 5 handoff progress
+
+- [x] 5.1 dataset byte preservation: `.gitattributes` added; active workspace raw hashes and line counts match the assignment.
+- [x] 5.2 provider diagnostics: status, quota class, Retry-After, model, and sanitized primary/fallback errors are carried through CLI/eval/trace metadata.
+- [ ] 5.3 real Gemini baseline/improved/memory runs and one measured improvement.
+- [ ] 5.4 real LangSmith uploads and trace exports.
+- [ ] 5.5 live Streamlit health check.
+- [ ] 5.6 full clean verification in the test runner environment.

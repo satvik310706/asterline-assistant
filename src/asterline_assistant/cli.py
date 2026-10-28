@@ -10,7 +10,7 @@ from .config import Settings
 from .corpus import load_corpus, validate_corpus_integrity
 from .eval_runner import citation_pairs, run as run_eval
 from .memory_eval import run_memory_eval
-from .llm import make_provider
+from .llm import ProviderFailure, format_failure, make_provider
 from .memory import MemoryStore
 from .research import run_research
 from .graph import run_improved_research
@@ -73,7 +73,12 @@ def main() -> None:
         provider = make_provider(args.provider or settings.llm_provider, settings.gemini_model, settings.ollama_model)
         retriever = HybridRetriever(load_corpus(settings.corpus_path), settings.chroma_path, settings.fastembed_cache_path)
         research_fn = run_improved_research if settings.config == "improved" else run_research
-        response = research_fn(args.question, args.user, retriever, provider, MemoryStore(settings.sqlite_path))
+        try:
+            response = research_fn(args.question, args.user, retriever, provider, MemoryStore(settings.sqlite_path))
+        except ProviderFailure as error:
+            print("The language model is temporarily unavailable; here are the most relevant sources:")
+            print(format_failure(provider.name, provider.model, error, "primary"))
+            raise SystemExit(0)
         print(response.answer)
         print(f"provider/model: {response.provider}/{response.model}")
         print(f"degraded: {response.degraded}")

@@ -22,12 +22,13 @@ DECLINE_MARKERS = re.compile(r"(?i)(unable to answer|cannot answer|not (?:stated
 
 
 class ProviderFailure(RuntimeError):
-    def __init__(self, message: str, *, error_class: str, transient: bool, status_code: int | None = None, retry_after: float | None = None, attempts: int = 0, detail: str | None = None, raw_reply: str | None = None, quality: bool = False) -> None:
+    def __init__(self, message: str, *, error_class: str, transient: bool, status_code: int | None = None, retry_after: float | None = None, quota_type: str | None = None, attempts: int = 0, detail: str | None = None, raw_reply: str | None = None, quality: bool = False) -> None:
         super().__init__(message)
         self.error_class = error_class
         self.transient = transient
         self.status_code = status_code
         self.retry_after = retry_after
+        self.quota_type = quota_type
         self.attempts = attempts
         self.detail = detail or message
         self.raw_reply = raw_reply
@@ -95,7 +96,8 @@ def classify_failure(error: Exception, attempts: int = 0) -> ProviderFailure:
     config_error = code in CONFIG_CODES or any(marker in detail.lower() for marker in CONFIG_MARKERS)
     transient = not config_error and (code in TRANSIENT_CODES or isinstance(error, TimeoutError) or "timeout" in error.__class__.__name__.lower())
     message = "Gemini rejected the model/key: check GEMINI_MODEL and your key." if config_error else "provider request failed"
-    return ProviderFailure(message, error_class=error.__class__.__name__, transient=transient, status_code=code, retry_after=_retry_after(error), attempts=attempts, detail=detail)
+    quota_type = "per-day" if re.search(r"per[- ]day|daily quota|daily limit", detail, re.IGNORECASE) else ("per-minute" if re.search(r"per[- ]minute|per minute|minute quota|rpm", detail, re.IGNORECASE) else None)
+    return ProviderFailure(message, error_class=error.__class__.__name__, transient=transient, status_code=code, retry_after=_retry_after(error), quota_type=quota_type, attempts=attempts, detail=detail)
 
 
 def _sanitize(value: str) -> str:
@@ -103,9 +105,11 @@ def _sanitize(value: str) -> str:
 
 
 def format_failure(provider: str, model: str, failure: ProviderFailure, role: str) -> str:
-    status = f" {failure.status_code}" if failure.status_code is not None else ""
+    status = f" status={failure.status_code}" if failure.status_code is not None else " status=unknown"
+    quota = f" quota={failure.quota_type}" if failure.quota_type else " quota=unknown"
+    retry = f" retry_after={failure.retry_after:g}s" if failure.retry_after is not None else " retry_after=none"
     raw = f" raw reply (first 300): {_sanitize(failure.raw_reply)}" if failure.raw_reply is not None else ""
-    return f"{role}: {provider}/{model} failed: {failure.error_class}{status} {_sanitize(failure.detail)}{raw}"
+    return f"{role}: {provider}/{model} failed: {failure.error_class}{status}{quota}{retry} {_sanitize(failure.detail)}{raw}"
 
 
 def parse_text_answer(text: str, evidence: EvidencePack, *, attempt: int, degraded: bool) -> AnswerDraft:
@@ -186,7 +190,7 @@ class GeminiLLM(LLMProvider):
                 response = self.client.models.generate_content(model=self.model, contents=instruction, config={"temperature": 0})
                 self.breaker.record_success()
                 draft = parse_text_answer(response.text or "", evidence, attempt=attempt, degraded=False)
-                draft.trace_metadata = {"provider": self.name, "model": self.model, "attempts": attempt, "degraded": False, "error_class": None}
+                draft.trace_metadata = {"provider": self.name, "model": self.model, "attempts": attempt, "degraded": False, "error_class": None, "status": None, "quota_type": None, "retry_after": None}
                 return draft
             except ProviderFailure as failure:
                 if failure.error_class in {"InvalidCitation", "MissingCitation", "EmptyResponse"} and parse_retries == 0:
@@ -311,7 +315,7 @@ class ResilientLLM(LLMProvider):
                 primary_text = format_failure(self.primary.name, self.primary.model, primary_error, "primary")
                 draft.primary_error = primary_text
                 draft.error_class = primary_error.error_class
-                draft.trace_metadata = {"provider": self.name, "model": self.model, "attempts": primary_error.attempts + 1, "degraded": True, "error_class": primary_error.error_class, "primary_error": primary_text, "fallback_error": None}
+                draft.trace_metadata = {"provider": self.name, "model": self.model, "attempts": primary_error.attempts + 1, "degraded": True, "error_class": primary_error.error_class, "status": primary_error.status_code, "quota_type": primary_error.quota_type, "retry_after": primary_error.retry_after, "primary_error": primary_text, "fallback_error": None}
                 return draft
             except ProviderFailure as fallback_error:
                 self.calls = self.primary.calls + self.fallback.calls
@@ -319,7 +323,7 @@ class ResilientLLM(LLMProvider):
                 message = "The language model is temporarily unavailable; here are the most relevant sources:"
                 primary_text = format_failure(self.primary.name, self.primary.model, primary_error, "primary")
                 fallback_text = format_failure(self.fallback.name, self.fallback.model, fallback_error, "fallback")
-                return AnswerDraft(answer=message, degraded=True, provider_error=True, attempts=primary_error.attempts + fallback_error.attempts, error_class=primary_error.error_class, primary_error=primary_text, fallback_error=fallback_text, trace_metadata={"provider": "unavailable", "model": self.fallback.model, "attempts": primary_error.attempts + fallback_error.attempts, "degraded": True, "error_class": primary_error.error_class, "primary_error": primary_text, "fallback_error": fallback_text})
+                return AnswerDraft(answer=message, degraded=True, provider_error=True, attempts=primary_error.attempts + fallback_error.attempts, error_class=primary_error.error_class, primary_error=primary_text, fallback_error=fallback_text, trace_metadata={"provider": "unavailable", "model": self.fallback.model, "attempts": primary_error.attempts + fallback_error.attempts, "degraded": True, "error_class": primary_error.error_class, "status": primary_error.status_code, "quota_type": primary_error.quota_type, "retry_after": primary_error.retry_after, "primary_error": primary_text, "fallback_error": fallback_text})
 
     def preflight(self, evidence: EvidencePack) -> None:
         try:

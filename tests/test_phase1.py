@@ -11,7 +11,7 @@ import json
 import pytest
 
 from asterline_assistant.eval_runner import abstention_pass, cache_key, citation_pairs, fact_pass, superseded_pass
-from asterline_assistant.llm import AnswerDraft, CircuitBreaker, GeminiLLM, LLMProvider, OllamaLLM, ProviderFailure, ResilientLLM, parse_text_answer
+from asterline_assistant.llm import AnswerDraft, CircuitBreaker, GeminiLLM, LLMProvider, OllamaLLM, ProviderFailure, ResilientLLM, classify_failure, format_failure, parse_text_answer
 from asterline_assistant.models import HistoryMessage
 from asterline_assistant.research import route
 from asterline_assistant.retrieval import HybridRetriever
@@ -146,6 +146,16 @@ def test_gemini_honors_retry_after() -> None:
     provider.client = FakeGeminiClient([FakeAPIError(429, {"Retry-After": "7"}), answer_payload()])
     provider.answer("q", EvidencePack(query="q", chunks=[]))
     assert sleeps == [7.0]
+
+
+def test_provider_diagnostic_includes_status_quota_and_retry_after() -> None:
+    error = FakeAPIError(429, {"Retry-After": "7"})
+    error.args = ("quota exceeded per-minute",)
+    failure = classify_failure(error, attempts=5)
+    rendered = format_failure("gemini", "test", failure, "primary")
+    assert "status=429" in rendered
+    assert "retry_after=7s" in rendered
+    assert "quota=per-minute" in rendered
 
 
 def test_gemini_does_not_retry_configuration_error() -> None:

@@ -46,7 +46,10 @@ class AnswerDraft(BaseModel):
     error_class: str | None = None
     primary_error: str | None = None
     fallback_error: str | None = None
-    trace_metadata: dict[str, str | int | bool | None] = Field(default_factory=dict)
+    error_status: int | None = None
+    quota_type: str | None = None
+    retry_after: float | None = None
+    trace_metadata: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
 
 
 class ResearchResponse(BaseModel):
@@ -62,6 +65,9 @@ class ResearchResponse(BaseModel):
     error_class: str | None = None
     primary_error: str | None = None
     fallback_error: str | None = None
+    error_status: int | None = None
+    quota_type: str | None = None
+    retry_after: float | None = None
     provider_error: bool = False
 
 
