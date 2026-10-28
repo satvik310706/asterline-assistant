@@ -120,7 +120,7 @@ class MemoryEvalApp:
         validate_corpus_integrity(self.settings.corpus_path)
         self.memory = MemoryStore(self.db_path, clock=self.clock)
         self.retriever = HybridRetriever(load_corpus(self.settings.corpus_path), self.settings.chroma_path, self.settings.fastembed_cache_path)
-        self.provider = make_provider(self.provider_name, self.settings.gemini_model, self.settings.ollama_model)
+        self.provider = make_provider(self.provider_name, self.settings.gemini_model, self.settings.ollama_model, no_fallback=self.settings.eval_no_fallback)
 
     def close(self) -> None:
         self.memory.connection.close()
