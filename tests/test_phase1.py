@@ -11,7 +11,7 @@ import json
 import pytest
 
 from asterline_assistant.eval_runner import abstention_pass, cache_key, citation_pairs, fact_pass, superseded_pass
-from asterline_assistant.llm import AnswerDraft, CircuitBreaker, GeminiLLM, LLMProvider, OllamaLLM, ProviderFailure, ResilientLLM
+from asterline_assistant.llm import AnswerDraft, CircuitBreaker, GeminiLLM, LLMProvider, OllamaLLM, ProviderFailure, ResilientLLM, parse_text_answer
 from asterline_assistant.models import HistoryMessage
 from asterline_assistant.research import route
 from asterline_assistant.retrieval import HybridRetriever
@@ -112,7 +112,7 @@ class FakeGeminiClient:
 
 
 def answer_payload(answer: str = "ready") -> object:
-    return type("Response", (), {"text": json.dumps({"answer": answer})})()
+    return type("Response", (), {"text": answer})()
 
 
 def test_gemini_retries_503_with_bounded_backoff() -> None:
@@ -189,6 +189,14 @@ def test_gemini_failure_followed_by_ollama_success_keeps_primary_diagnostic() ->
     assert result.degraded is True
     assert result.primary_error and "primary: gemini/test failed" in result.primary_error
     assert result.fallback_error is None
+
+
+def test_gemini_plain_text_parser_accepts_fenced_reply_shape() -> None:
+    chunk = load_corpus(ROOT / "data/corpus.jsonl")[0]
+    raw_reply = f"```text\nThe current policy is documented here [{chunk.chunk_id} {chr(0x2014)} {chunk.title}].\n```"
+    result = parse_text_answer(raw_reply, EvidencePack(query="q", chunks=[{"chunk": chunk}]), attempt=1, degraded=False)
+    assert result.answer.startswith("The current policy")
+    assert result.cited_chunk_ids == [chunk.chunk_id]
 
 
 def test_ollama_plain_text_validates_citations_and_retries_parse_failures() -> None:

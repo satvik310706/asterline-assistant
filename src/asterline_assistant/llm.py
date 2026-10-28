@@ -21,7 +21,7 @@ CONFIG_MARKERS = ("model not found", "model no longer available", "not_found", "
 
 
 class ProviderFailure(RuntimeError):
-    def __init__(self, message: str, *, error_class: str, transient: bool, status_code: int | None = None, retry_after: float | None = None, attempts: int = 0, detail: str | None = None) -> None:
+    def __init__(self, message: str, *, error_class: str, transient: bool, status_code: int | None = None, retry_after: float | None = None, attempts: int = 0, detail: str | None = None, raw_reply: str | None = None) -> None:
         super().__init__(message)
         self.error_class = error_class
         self.transient = transient
@@ -29,6 +29,7 @@ class ProviderFailure(RuntimeError):
         self.retry_after = retry_after
         self.attempts = attempts
         self.detail = detail or message
+        self.raw_reply = raw_reply
 
 
 class CircuitBreaker:
@@ -101,7 +102,19 @@ def _sanitize(value: str) -> str:
 
 def format_failure(provider: str, model: str, failure: ProviderFailure, role: str) -> str:
     status = f" {failure.status_code}" if failure.status_code is not None else ""
-    return f"{role}: {provider}/{model} failed: {failure.error_class}{status} {_sanitize(failure.detail)}"
+    raw = f" raw reply (first 300): {_sanitize(failure.raw_reply)}" if failure.raw_reply is not None else ""
+    return f"{role}: {provider}/{model} failed: {failure.error_class}{status} {_sanitize(failure.detail)}{raw}"
+
+
+def parse_text_answer(text: str, evidence: EvidencePack, *, attempt: int, degraded: bool) -> AnswerDraft:
+    cleaned = re.sub(r"^\s*```(?:json|text)?\s*|\s*```\s*$", "", text or "", flags=re.IGNORECASE | re.DOTALL).strip()
+    if not cleaned:
+        raise ProviderFailure("model returned an empty reply", error_class="EmptyResponse", transient=False, attempts=attempt, raw_reply=(text or "")[:300])
+    citations = re.findall(r"\[([^\s—]+)\s+—\s+([^\]]+)\]", cleaned)
+    known = {item.chunk.chunk_id for item in evidence.chunks}
+    if evidence.chunks and (not citations or any(chunk_id not in known for chunk_id, _ in citations)):
+        raise ProviderFailure("model cited a source outside the evidence pack", error_class="CitationValidationError", transient=False, attempts=attempt, raw_reply=cleaned[:300])
+    return AnswerDraft(answer=cleaned, cited_chunk_ids=[chunk_id for chunk_id, _ in citations], degraded=degraded, attempts=attempt, trace_metadata={"provider": "ollama" if degraded else "gemini", "attempts": attempt, "degraded": degraded, "error_class": None})
 
 
 class LLMProvider:
@@ -154,17 +167,23 @@ class GeminiLLM(LLMProvider):
         if self.client is None:
             raise ProviderFailure("Gemini is not configured", error_class="ConfigurationError", transient=False)
         context = "\n".join(f"{x.chunk.chunk_id} | {x.chunk.title} | {x.chunk.text}" for x in evidence.chunks)
-        prompt = f"Answer only from this evidence. Cite each claim as [chunk_id — title]. If insufficient, abstain.\nQuestion: {question}\nEvidence:\n{context}"
+        prompt = f"Answer only from this evidence in plain text. Cite each claim exactly as [chunk_id — title]. If insufficient, abstain.\nQuestion: {question}\nEvidence:\n{context}"
         waited = 0.0
+        parse_retries = 0
         for attempt in range(1, self.max_attempts + 1):
             self.calls += 1
             try:
-                response = self.client.models.generate_content(model=self.model, contents=prompt, config={"temperature": 0, "response_mime_type": "application/json", "response_schema": AnswerDraft})
+                instruction = prompt if parse_retries == 0 else f"{prompt}\nReturn only a short plain-text answer and valid citations; do not use JSON or Markdown fences."
+                response = self.client.models.generate_content(model=self.model, contents=instruction, config={"temperature": 0})
                 self.breaker.record_success()
-                draft = AnswerDraft.model_validate(json.loads(response.text or "{}"))
-                draft.attempts = attempt
+                draft = parse_text_answer(response.text or "", evidence, attempt=attempt, degraded=False)
                 draft.trace_metadata = {"provider": self.name, "model": self.model, "attempts": attempt, "degraded": False, "error_class": None}
                 return draft
+            except ProviderFailure as failure:
+                if failure.error_class in {"CitationValidationError", "EmptyResponse"} and parse_retries == 0:
+                    parse_retries += 1
+                    continue
+                raise failure from None
             except Exception as error:
                 failure = classify_failure(error, attempts=attempt)
                 if not failure.transient:
@@ -223,13 +242,9 @@ class OllamaLLM(LLMProvider):
         return str(result.get("response", ""))
 
     def _parse_text(self, text: str, evidence: EvidencePack, attempt: int) -> AnswerDraft:
-        if not text.strip():
-            raise ProviderFailure("Ollama returned an empty reply", error_class="EmptyResponse", transient=False, attempts=attempt)
-        citations = re.findall(r"\[([^\s—]+)\s+—\s+([^\]]+)\]", text)
-        known = {item.chunk.chunk_id: item.chunk.title for item in evidence.chunks}
-        if not citations or any(chunk_id not in known for chunk_id, _ in citations):
-            raise ProviderFailure("Ollama cited a source outside the evidence pack", error_class="CitationValidationError", transient=False, attempts=attempt)
-        return AnswerDraft(answer=text.strip(), cited_chunk_ids=[chunk_id for chunk_id, _ in citations], degraded=True, attempts=attempt, trace_metadata={"provider": self.name, "model": self.model, "attempts": attempt, "degraded": True, "error_class": None})
+        draft = parse_text_answer(text, evidence, attempt=attempt, degraded=True)
+        draft.trace_metadata = {"provider": self.name, "model": self.model, "attempts": attempt, "degraded": True, "error_class": None}
+        return draft
 
 
 class ResilientLLM(LLMProvider):
