@@ -6,6 +6,8 @@ from playwright.sync_api import sync_playwright
 
 NAME = "Satvik Pedamallu"
 NIAT_ID = "N24H01A0514"
+CANDIDATE_NAME = NAME
+CANDIDATE_ID = NIAT_ID
 GITHUB_URL = "https://github.com/satvik310706/asterline-assistant"
 LANGSMITH_URL = "https://smith.langchain.com/o/34ea5156-f488-4661-b611-d4fa3993ddf4/a/asterline-assistant/projects/p/e99ab585-0198-416a-b09f-471470f3df09"
 
