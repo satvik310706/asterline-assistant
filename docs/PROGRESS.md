@@ -72,3 +72,4 @@ Status is updated after each deliverable with what works, verification commands,
 - [x] Verified Gemini HTTP 429 → Ollama fallback returns a cited answer; improved parser normalizes bare `SOURCE id | title` headers and validates IDs against evidence.
 - [x] UI now streams actual LangGraph node-completion events and elapsed timings; baseline UI labels its simpler path honestly.
 - [x] Current full test suite: 52 passed.
+- [x] Final fresh-clone hardening on the integrated implementation: 52 passed, raw dataset hashes matched, FakeLLM smoke passed, and the non-fixture secret scan passed.
