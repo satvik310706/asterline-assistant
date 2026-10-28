@@ -64,7 +64,7 @@ def citation_ids(answer: str) -> list[str]:
 
 def cache_key(row: dict[str, Any], provider: str, model: str, config: str, evidence: EvidencePack) -> str:
     evidence_hash = hashlib.sha256(json.dumps([item.chunk.model_dump(mode="json") for item in evidence.chunks], sort_keys=True).encode()).hexdigest()
-    payload = {"provider": provider, "model": model, "config": config, "question": row["question"], "evidence_hash": evidence_hash}
+    payload = {"provider": provider, "model": model, "config": config, "pipeline_revision": "improved-v3" if config == "improved" else "baseline-v1", "question": row["question"], "evidence_hash": evidence_hash}
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
@@ -73,9 +73,19 @@ def _mean(values: list[float]) -> float:
 
 
 def _atomic_write(path: Path, payload: dict[str, Any]) -> None:
-    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp")
     temporary.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    temporary.replace(path)
+    for attempt in range(5):
+        try:
+            temporary.replace(path)
+            return
+        except PermissionError:
+            if attempt == 4:
+                # Windows scanners can briefly hold the target. Preserve the
+                # completed payload instead of aborting the whole evaluation.
+                path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+                return
+            time.sleep(0.1 * (attempt + 1))
 
 
 def _safe_error(error: Exception) -> tuple[str, str]:

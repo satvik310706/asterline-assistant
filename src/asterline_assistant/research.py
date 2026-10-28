@@ -91,7 +91,11 @@ def run_research(question: str, user_id: str, retriever: HybridRetriever, provid
             return ResearchResponse(answer=f"Last time you were investigating {stale[0].content}. Is that still relevant?", evidence=[], memory_used=used, provider=provider.name, model=provider.model)
         if records and re.search(r"(?i)(what plan did i|which plan did i|what do you remember)", question):
             return ResearchResponse(answer="From what you told me earlier: " + "; ".join(record.content for record in records[:2]) + ".", evidence=[], memory_used=used, provider=provider.name, model=provider.model)
-        query += " " + " ".join(record.content for record in records)
+        # Only relevant saved context may disambiguate retrieval. Dumping every
+        # memory into the query pollutes ranking and makes memory act like evidence.
+        question_terms = {term for term in tokenize(question) if len(term) > 3}
+        relevant_records = [record for record in records if question_terms.intersection(tokenize(record.content))]
+        query += " " + " ".join(record.content for record in relevant_records[:3])
         expansions = {
             r"(?i)aql timeout": "query:0 release-23:0 2.3 50 seconds",
             r"(?i)maximum number of rows": "query:0 8000",

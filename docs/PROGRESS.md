@@ -10,10 +10,11 @@
   - [x] analyst, verifier, and memory-writer integration
   - [x] graph tests and improved FakeLLM smoke run passed
   - Not verified: live LangSmith rendering; credentials were not inspected or required
-- [ ] B — failure-driven improvement and comparative evaluations
-  - [ ] cluster baseline failures and write failure log
-  - [ ] run improved and memory evaluations
-  - [ ] tests and commit
+- [x] B — failure-driven improvement and comparative evaluations
+  - [x] clustered the available generated baseline failures and rendered [FAILURE_LOG.md](./FAILURE_LOG.md)
+  - [x] ran full 80-case FakeLLM baseline and improved evaluations; improved memory-query pollution was reduced
+  - [x] focused graph, corpus, and memory tests passed
+  - Not verified: full Gemini baseline/improved comparison or Gemini memory run; Gemini preflight was unavailable
 - [ ] C — Streamlit UI and headless coverage
   - [ ] dark dense UI, sessions, chat, evidence, memory panel
   - [ ] AppTest and startup checks

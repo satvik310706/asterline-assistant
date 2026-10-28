@@ -17,7 +17,7 @@ from .llm import LLMProvider
 from .memory import MemoryStore
 from .models import EvidencePack, HistoryMessage, MemoryRecord, ResearchResponse
 from .research import build_evidence, retrieve, route, run_research
-from .retrieval import HybridRetriever
+from .retrieval import HybridRetriever, tokenize
 from .tracing import clear_trace_context, set_trace_context, traced
 
 
@@ -93,10 +93,8 @@ def memory_reader_agent(state: GraphState) -> GraphState:
 @traced("retriever")
 def retriever_agent(state: GraphState) -> GraphState:
     query = state["router"].standalone_query
-    records = state["memory_reader"].records
-    # Memory can disambiguate a query, but it is never placed in the evidence pack.
-    if records:
-        query += " " + " ".join(record.content for record in records[:3])
+    # Memory is read as unverified context by the answer path; it never enters
+    # the evidence pack or indiscriminately pollutes the retrieval query.
     return {"evidence": build_evidence(retrieve(query, state["retriever"]))}
 
 
@@ -113,10 +111,14 @@ def evidence_analyst_agent(state: GraphState) -> GraphState:
 
 @traced("answer_writer")
 def answer_writer_agent(state: GraphState) -> GraphState:
+    records = state["memory_reader"].records
+    query_terms = {term for term in tokenize(state["question"]) if len(term) > 3}
+    relevant_memory = any(query_terms.intersection(tokenize(record.content)) for record in records)
+    memory_request = bool(re.search(r"(?i)(remember|plan|investigat|where we left|what do you remember)", state["question"]))
     response = run_research(
         state["question"], state["user_id"], state["retriever"], state["provider"], state["memory"],
         history=state.get("history", []), prepared_query=state["router"].standalone_query,
-        prepared_evidence=state["assessment"].evidence, use_memory=True,
+        prepared_evidence=state["assessment"].evidence, use_memory=relevant_memory or memory_request,
     )
     return {"response": response}
 
