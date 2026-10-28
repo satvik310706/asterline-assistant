@@ -8,6 +8,7 @@ from pathlib import Path
 from .config import Settings
 from .corpus import load_corpus, validate_corpus_integrity
 from .eval_runner import citation_pairs, run as run_eval
+from .memory_eval import run_memory_eval
 from .llm import make_provider
 from .memory import MemoryStore
 from .research import run_research
@@ -16,12 +17,13 @@ from .retrieval import HybridRetriever
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["run", "ingest", "test", "eval", "ask"])
+    parser.add_argument("command", choices=["run", "ingest", "test", "eval", "eval-memory", "ask"])
     parser.add_argument("question", nargs="?")
     parser.add_argument("--provider", choices=["gemini", "ollama", "fake"])
     parser.add_argument("--config", choices=["baseline", "improved"])
     parser.add_argument("--user", default="alice")
     parser.add_argument("--limit", type=int)
+    parser.add_argument("--skip-preflight", action="store_true")
     args = parser.parse_args()
     settings = Settings.from_environment()
     if args.config:
@@ -33,7 +35,12 @@ def main() -> None:
         dataset = Path("eval/datasets/research.jsonl")
         if not dataset.exists():
             raise SystemExit("Evaluation dataset not found: eval/datasets/research.jsonl")
-        print(run_eval(dataset, settings, limit=args.limit))
+        print(run_eval(dataset, settings, limit=args.limit, skip_preflight=args.skip_preflight))
+    elif args.command == "eval-memory":
+        dataset = Path("eval/datasets/memory.jsonl")
+        if not dataset.exists():
+            raise SystemExit("Memory evaluation dataset not found: eval/datasets/memory.jsonl")
+        print(run_memory_eval(dataset, settings, provider_name=args.provider or settings.llm_provider, limit=args.limit))
     elif args.command == "test":
         import pytest
         raise SystemExit(pytest.main(["tests"]))

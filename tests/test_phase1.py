@@ -222,7 +222,7 @@ def test_ollama_plain_text_validates_citations_and_retries_parse_failures() -> N
     assert provider.calls == 2
 
 
-@pytest.mark.parametrize("reply,error_class", [("Answer [missing:0 — Nope].", "CitationValidationError"), ("", "EmptyResponse")])
+@pytest.mark.parametrize("reply,error_class", [("Answer [missing:0 — Nope].", "InvalidCitation"), ("", "EmptyResponse")])
 def test_ollama_rejects_invalid_or_empty_text_after_one_retry(reply: str, error_class: str) -> None:
     provider = OllamaLLM("llama3.2:3b", request_fn=lambda _: reply)
     with pytest.raises(ProviderFailure) as error:
@@ -259,8 +259,45 @@ def test_preflight_always_429_exhausts_once_without_fallback_retry_loop() -> Non
     with pytest.raises(ProviderFailure) as error:
         ResilientLLM(primary, fallback).preflight(EvidencePack(query="q", chunks=[]))
     assert error.value.status_code == 429
-    assert primary.client.calls == 4
-    assert len(sleeps) == 3
+    assert primary.client.calls == 1
+    assert len(sleeps) == 0
+
+
+def test_abstention_without_citations_is_valid() -> None:
+    chunk = load_corpus(ROOT / "data/corpus.jsonl")[0]
+    provider = GeminiLLM("test", max_attempts=1)
+    provider.client = FakeGeminiClient([type("Response", (), {"text": "I am unable to answer this request based on the provided evidence."})()])
+    result = provider.answer("q", EvidencePack(query="q", chunks=[{"chunk": chunk}]))
+    assert result.abstained is True
+    assert result.cited_chunk_ids == []
+
+
+def test_factual_reply_without_citations_is_missing_citation_after_retry() -> None:
+    chunk = load_corpus(ROOT / "data/corpus.jsonl")[0]
+    provider = GeminiLLM("test", max_attempts=2)
+    provider.client = FakeGeminiClient([type("Response", (), {"text": "The answer is 20 days."})(), type("Response", (), {"text": "Still 20 days."})()])
+    with pytest.raises(ProviderFailure) as error:
+        provider.answer("q", EvidencePack(query="q", chunks=[{"chunk": chunk}]))
+    assert error.value.error_class == "MissingCitation"
+    assert error.value.quality is True
+    assert provider.client.calls == 2
+
+
+def test_invalid_citation_is_distinct_from_missing_citation() -> None:
+    chunk = load_corpus(ROOT / "data/corpus.jsonl")[0]
+    provider = GeminiLLM("test", max_attempts=2)
+    provider.client = FakeGeminiClient([type("Response", (), {"text": "Answer [not-in-pack:0 — Nope]."})(), type("Response", (), {"text": "Answer [not-in-pack:0 — Nope]."})()])
+    with pytest.raises(ProviderFailure) as error:
+        provider.answer("q", EvidencePack(query="q", chunks=[{"chunk": chunk}]))
+    assert error.value.error_class == "InvalidCitation"
+
+
+def test_ollama_prompt_has_no_literal_placeholder() -> None:
+    prompts: list[str] = []
+    provider = OllamaLLM("llama3.2:3b", request_fn=lambda prompt: prompts.append(prompt) or "I cannot answer from the evidence.")
+    chunk = load_corpus(ROOT / "data/corpus.jsonl")[0]
+    provider.answer("q", EvidencePack(query="q", chunks=[{"chunk": chunk}]))
+    assert prompts and "[chunk_id" not in prompts[0]
 
 
 def test_circuit_breaker_opens_after_three_failures() -> None:

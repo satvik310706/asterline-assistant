@@ -18,10 +18,11 @@ from .models import AnswerDraft, EvidencePack
 TRANSIENT_CODES = {429, 500, 503, 504}
 CONFIG_CODES = {400, 401, 403, 404}
 CONFIG_MARKERS = ("model not found", "model no longer available", "not_found", "not found")
+DECLINE_MARKERS = re.compile(r"(?i)(unable to answer|cannot answer|not (?:stated|published|available|mentioned)|no information|cannot confirm|evidence does not|not in the (?:provided )?(?:documents|evidence))")
 
 
 class ProviderFailure(RuntimeError):
-    def __init__(self, message: str, *, error_class: str, transient: bool, status_code: int | None = None, retry_after: float | None = None, attempts: int = 0, detail: str | None = None, raw_reply: str | None = None) -> None:
+    def __init__(self, message: str, *, error_class: str, transient: bool, status_code: int | None = None, retry_after: float | None = None, attempts: int = 0, detail: str | None = None, raw_reply: str | None = None, quality: bool = False) -> None:
         super().__init__(message)
         self.error_class = error_class
         self.transient = transient
@@ -30,6 +31,7 @@ class ProviderFailure(RuntimeError):
         self.attempts = attempts
         self.detail = detail or message
         self.raw_reply = raw_reply
+        self.quality = quality
 
 
 class CircuitBreaker:
@@ -112,8 +114,12 @@ def parse_text_answer(text: str, evidence: EvidencePack, *, attempt: int, degrad
         raise ProviderFailure("model returned an empty reply", error_class="EmptyResponse", transient=False, attempts=attempt, raw_reply=(text or "")[:300])
     citations = re.findall(r"\[([^\s—]+)\s+—\s+([^\]]+)\]", cleaned)
     known = {item.chunk.chunk_id for item in evidence.chunks}
-    if evidence.chunks and (not citations or any(chunk_id not in known for chunk_id, _ in citations)):
-        raise ProviderFailure("model cited a source outside the evidence pack", error_class="CitationValidationError", transient=False, attempts=attempt, raw_reply=cleaned[:300])
+    if any(chunk_id not in known for chunk_id, _ in citations):
+        raise ProviderFailure("model cited a chunk outside the evidence pack", error_class="InvalidCitation", transient=False, attempts=attempt, raw_reply=cleaned[:300], quality=True)
+    if evidence.chunks and not citations:
+        if not DECLINE_MARKERS.search(cleaned):
+            raise ProviderFailure("factual reply did not include a citation", error_class="MissingCitation", transient=False, attempts=attempt, raw_reply=cleaned[:300], quality=True)
+        return AnswerDraft(answer=cleaned, cited_chunk_ids=[], abstained=True, degraded=degraded, attempts=attempt, trace_metadata={"provider": "ollama" if degraded else "gemini", "attempts": attempt, "degraded": degraded, "error_class": None})
     return AnswerDraft(answer=cleaned, cited_chunk_ids=[chunk_id for chunk_id, _ in citations], degraded=degraded, attempts=attempt, trace_metadata={"provider": "ollama" if degraded else "gemini", "attempts": attempt, "degraded": degraded, "error_class": None})
 
 
@@ -127,6 +133,9 @@ class LLMProvider:
 
     def answer(self, question: str, evidence: EvidencePack) -> AnswerDraft:
         raise NotImplementedError
+
+    def preflight(self, evidence: EvidencePack) -> None:
+        self.answer("Reply briefly using the evidence.", evidence)
 
 
 class FakeLLM(LLMProvider):
@@ -180,7 +189,7 @@ class GeminiLLM(LLMProvider):
                 draft.trace_metadata = {"provider": self.name, "model": self.model, "attempts": attempt, "degraded": False, "error_class": None}
                 return draft
             except ProviderFailure as failure:
-                if failure.error_class in {"CitationValidationError", "EmptyResponse"} and parse_retries == 0:
+                if failure.error_class in {"InvalidCitation", "MissingCitation", "EmptyResponse"} and parse_retries == 0:
                     parse_retries += 1
                     continue
                 raise failure from None
@@ -202,6 +211,22 @@ class GeminiLLM(LLMProvider):
                 waited += delay
         raise ProviderFailure("Gemini request failed", error_class="RetryExhausted", transient=True, attempts=self.max_attempts)
 
+    def preflight(self, evidence: EvidencePack) -> None:
+        if self.breaker.is_open():
+            raise ProviderFailure("Gemini circuit breaker is open", error_class="CircuitOpen", transient=True)
+        if self.client is None:
+            raise ProviderFailure("Gemini is not configured", error_class="ConfigurationError", transient=False)
+        context = "\n".join(f"{x.chunk.chunk_id} | {x.chunk.title} | {x.chunk.text}" for x in evidence.chunks)
+        try:
+            self.calls += 1
+            response = self.client.models.generate_content(model=self.model, contents=f"Reply briefly using this evidence.\n{context}", config={"temperature": 0})
+            if not (response.text or "").strip():
+                raise ProviderFailure("model returned an empty reply", error_class="EmptyResponse", transient=False)
+        except ProviderFailure:
+            raise
+        except Exception as error:
+            raise classify_failure(error, attempts=1) from None
+
 
 class OllamaLLM(LLMProvider):
     name = "ollama"
@@ -212,19 +237,20 @@ class OllamaLLM(LLMProvider):
         self.request_fn = request_fn or self._request
 
     def answer(self, question: str, evidence: EvidencePack) -> AnswerDraft:
-        context = "\n".join(f"{x.chunk.chunk_id} | {x.chunk.title} | {x.chunk.text}" for x in evidence.chunks)
+        context = "\n".join(f"SOURCE {x.chunk.chunk_id} | {x.chunk.title}\n{x.chunk.text}" for x in evidence.chunks)
+        example = f"Example citation using an actual source: [{evidence.chunks[0].chunk.chunk_id} — {evidence.chunks[0].chunk.title}]" if evidence.chunks else "If there is no evidence, say you cannot answer."
         errors: list[ProviderFailure] = []
         for attempt in (1, 2):
             self.calls += 1
             try:
-                prompt = f"Answer briefly using only the evidence. Cite sources exactly as [chunk_id — title]. Question: {question}\nEvidence:\n{context}"
+                prompt = f"Answer briefly using only the evidence. Copy source ids and titles exactly from the evidence headers. {example}\nQuestion: {question}\nEvidence:\n{context}"
                 if attempt == 2:
-                    prompt = f"Answer in one or two sentences and cite one source as [chunk_id — title]. Q: {question}\n{context}"
+                    prompt = f"Answer in one or two sentences. Copy one exact citation from the evidence headers. {example} Q: {question}\n{context}"
                 text = self.request_fn(prompt)
                 return self._parse_text(text, evidence, attempt)
             except ProviderFailure as error:
                 errors.append(error)
-                if error.error_class in {"CitationValidationError", "ResponseParseError", "EmptyResponse"} and attempt == 1:
+                if error.error_class in {"InvalidCitation", "MissingCitation", "ResponseParseError", "EmptyResponse"} and attempt == 1:
                     continue
                 raise error from None
             except Exception as error:
@@ -246,6 +272,16 @@ class OllamaLLM(LLMProvider):
         draft.trace_metadata = {"provider": self.name, "model": self.model, "attempts": attempt, "degraded": True, "error_class": None}
         return draft
 
+    def preflight(self, evidence: EvidencePack) -> None:
+        try:
+            text = self.request_fn(f"Reply briefly using this evidence.\n{chr(10).join(item.chunk.text for item in evidence.chunks)}")
+            if not text.strip():
+                raise ProviderFailure("Ollama returned an empty reply", error_class="EmptyResponse", transient=False)
+        except ProviderFailure:
+            raise
+        except Exception as error:
+            raise classify_failure(error, attempts=1) from None
+
 
 class ResilientLLM(LLMProvider):
     """Use Gemini when available, then Ollama, never exposing provider exceptions."""
@@ -264,6 +300,8 @@ class ResilientLLM(LLMProvider):
             self.name, self.model = self.primary.name, self.primary.model
             return draft
         except ProviderFailure as primary_error:
+            if primary_error.quality:
+                return AnswerDraft(answer=primary_error.raw_reply or str(primary_error), error_class=primary_error.error_class, attempts=primary_error.attempts, trace_metadata={"provider": self.primary.name, "model": self.primary.model, "attempts": primary_error.attempts, "degraded": False, "error_class": primary_error.error_class})
             try:
                 draft = self.fallback.answer(question, evidence)
                 self.calls = self.primary.calls + self.fallback.calls
@@ -285,10 +323,10 @@ class ResilientLLM(LLMProvider):
 
     def preflight(self, evidence: EvidencePack) -> None:
         try:
-            self.primary.answer("Reply with one word: ready", evidence)
+            self.primary.preflight(evidence)
         except ProviderFailure as primary_error:
             try:
-                self.fallback.answer("Reply with one word: ready", evidence)
+                self.fallback.preflight(evidence)
             except ProviderFailure as fallback_error:
                 primary_text = format_failure(self.primary.name, self.primary.model, primary_error, "primary")
                 fallback_text = format_failure(self.fallback.name, self.fallback.model, fallback_error, "fallback")

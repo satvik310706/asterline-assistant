@@ -122,7 +122,7 @@ def _summary(case_results: list[dict[str, Any]], rows: list[dict[str, Any]]) -> 
         by_category[category] = {metric: metric_summary([result for result in case_results if result["category"] == category], metric) for metric in metrics}
     provider_errors = [{"id": result["id"], "category": result["category"], "provider": result["provider"], "error_class": result.get("error_class"), "primary_error": result.get("primary_error"), "fallback_error": result.get("fallback_error"), "reason": "language model providers unavailable"} for result in case_results if result["status"] == "provider_error"]
     eval_errors = [{"id": result["id"], "category": result["category"], "error_class": result.get("error_class"), "message": result.get("error_message", "evaluation case failed")} for result in case_results if result["status"] == "eval_error"]
-    failures = [{"id": result["id"], "category": result["category"], "failed": [metric for metric, value in result["checks"].items() if value is not None and not value], "reason": "one or more deterministic checks failed"} for result in case_results if result["status"] == "ok" and any(value is not None and not value for value in result["checks"].values())]
+    failures = [{"id": result["id"], "category": result["category"], "failed": [metric for metric, value in result["checks"].items() if value is not None and not value], "reason": "one or more deterministic checks failed"} for result in case_results if result["status"] in {"ok", "quality_error"} and any(value is not None and not value for value in result["checks"].values())]
     providers: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for result in case_results:
         providers[result["provider"]]["answers"] += int(result["status"] == "ok")
@@ -137,7 +137,7 @@ def _summary(case_results: list[dict[str, Any]], rows: list[dict[str, Any]]) -> 
     return overall, by_category | {"by_provider": by_provider}, provider_errors, failures + eval_errors
 
 
-def run(dataset: Path, settings: Settings, limit: int | None = None) -> Path:
+def run(dataset: Path, settings: Settings, limit: int | None = None, skip_preflight: bool = False) -> Path:
     validate_corpus_integrity(settings.corpus_path)
     retriever = HybridRetriever(load_corpus(settings.corpus_path), settings.chroma_path, settings.fastembed_cache_path)
     provider = make_provider(settings.llm_provider, settings.gemini_model, settings.ollama_model)
@@ -156,7 +156,7 @@ def run(dataset: Path, settings: Settings, limit: int | None = None) -> Path:
     old_project = os.environ.get("LANGSMITH_PROJECT")
     os.environ["LANGSMITH_PROJECT"] = settings.eval_langsmith_project
     try:
-        if provider.name != "fake":
+        if provider.name != "fake" and not skip_preflight:
             first_row = rows[0] if rows else None
             if first_row is not None:
                 first_history = [HistoryMessage.model_validate(item) for item in first_row.get("history", [])]
@@ -201,9 +201,9 @@ def run(dataset: Path, settings: Settings, limit: int | None = None) -> Path:
                 if response.provider_error:
                     status = "provider_error"
             except ProviderFailure as error:
-                status = "provider_error"
                 error_class, error_message = _safe_error(error)
-                response = _source_only_response(evidence if "evidence" in locals() else EvidencePack(query=row["question"], chunks=[]), provider.name, provider.model, error_class, True, getattr(error, "primary_error", None), getattr(error, "fallback_error", None))
+                status = "quality_error" if error.quality else "provider_error"
+                response = _source_only_response(evidence if "evidence" in locals() else EvidencePack(query=row["question"], chunks=[]), provider.name, provider.model, error_class, not error.quality, getattr(error, "primary_error", None), getattr(error, "fallback_error", None))
             except Exception as error:
                 status = "eval_error"
                 error_class, error_message = _safe_error(error)
@@ -220,7 +220,7 @@ def run(dataset: Path, settings: Settings, limit: int | None = None) -> Path:
             _atomic_write(cache_path, cache)
             overall, grouped, provider_errors, failures = _summary(case_results, rows[:len(case_results)])
             _atomic_write(output_path, {"status": "partial", "config": settings.config, "provider": provider.name, "model": provider.model, "cases": len(rows), "completed": len(case_results), "overall": overall, "by_category": {key: value for key, value in grouped.items() if key != "by_provider"}, "by_provider": grouped.get("by_provider", {}), "provider_errors": provider_errors, "failures": failures, "case_results": case_results})
-            passed = status == "ok" and not any(value is not None and not value for value in result["checks"].values())
+            passed = status in {"ok", "quality_error"} and not any(value is not None and not value for value in result["checks"].values())
             print(f"{row['id']} {'PASS' if passed else status.upper() if status != 'ok' else 'FAIL'} {(time.perf_counter() - started):.2f}s")
             if len(case_results) >= 10 and sum(item["status"] == "provider_error" for item in case_results[:10]) / 10 > 0.3:
                 print("Eval stopped: more than 30% of the first 10 cases were provider_error.")
