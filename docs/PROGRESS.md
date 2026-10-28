@@ -25,10 +25,11 @@
   - [x] docs/TRACES.md
   - [x] tests passed: tracing redaction 1 passed
   - Not verified: shared LangSmith links or successful dataset upload; the installed client lacked the attempted upload API
-- [ ] E — generated documentation and demo
-  - [ ] generated EVAL.md, DESIGN.md, README updates, AI_USE.md
-  - [ ] DEMO.md and headless demo sequence
-  - [ ] tests and commit
+- [x] E — generated documentation and demo
+  - [x] generated EVAL.md, DESIGN.md, README updates, AI_USE.md
+  - [x] DEMO.md and documented headless demo sequence
+  - [x] published curated FakeLLM reports and reporting test added
+  - Not verified: Gemini headline reports, because Gemini preflight was unavailable
 - [ ] F — hardening and held-out evaluation
   - [ ] fresh-clone script, secret scan, outage simulations
   - [ ] held-out datasets and honest gap report
