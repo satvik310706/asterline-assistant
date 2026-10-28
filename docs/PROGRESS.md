@@ -56,3 +56,8 @@ Status is updated after each deliverable with what works, verification commands,
 - [x] Added `docs/WALKTHROUGH.md` with agent flow, trade-offs, and three live-change drills.
 - [x] Added `docs/QA_CHECKLIST.md` with fresh-clone, offline, eval, UI, and optional-provider checks.
 - [x] Implemented and tested injectable-clock task/project expiry; retrieval `k` remains an explicit typed drill point.
+
+## Phase 7 submission package
+
+- [x] Added `uv run asterline build-submission`, which reads `eval/final/*.json` and generates `SUBMISSION.md` and `SUBMISSION.pdf`.
+- [x] Added a generation test; repository/trace URLs remain explicit author-fill placeholders.

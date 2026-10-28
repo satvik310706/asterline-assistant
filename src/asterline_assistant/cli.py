@@ -17,11 +17,12 @@ from .graph import run_improved_research
 from .retrieval import HybridRetriever
 from .observability import export_langsmith_traces, export_representative_traces, maybe_upload
 from .reporting import publish_results, render_eval
+from .submission import build_submission
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["run", "ingest", "test", "eval", "eval-memory", "ask", "export-traces", "publish-results", "report"])
+    parser.add_argument("command", choices=["run", "ingest", "test", "eval", "eval-memory", "ask", "export-traces", "publish-results", "report", "build-submission"])
     parser.add_argument("question", nargs="?")
     parser.add_argument("--provider", choices=["gemini", "ollama", "fake"])
     parser.add_argument("--config", choices=["baseline", "improved"])
@@ -46,6 +47,10 @@ def main() -> None:
             print(report)
     elif args.command == "report":
         print(render_eval())
+    elif args.command == "build-submission":
+        markdown, pdf = build_submission()
+        print(markdown)
+        print(pdf)
     elif args.command == "eval":
         dataset = Path(args.dataset) if args.dataset else Path("eval/datasets/research.jsonl")
         if not dataset.exists():
