@@ -19,9 +19,10 @@ def tokenize(text: str) -> list[str]:
 
 
 class HybridRetriever:
-    def __init__(self, chunks: list[CorpusChunk], chroma_path: Path) -> None:
+    def __init__(self, chunks: list[CorpusChunk], chroma_path: Path, fastembed_cache_path: Path = Path(".cache/fastembed")) -> None:
         self.chunks = chunks
-        self.embedder = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+        fastembed_cache_path.mkdir(parents=True, exist_ok=True)
+        self.embedder = TextEmbedding(model_name="BAAI/bge-small-en-v1.5", cache_dir=str(fastembed_cache_path))
         self.client = chromadb.PersistentClient(path=str(chroma_path))
         self.collection = self.client.get_or_create_collection("corpus_chunks")
         self.bm25 = BM25Okapi([tokenize(f"{c.title} {c.text}") for c in chunks])

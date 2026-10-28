@@ -47,5 +47,5 @@ def run_research(question: str, user_id: str, retriever: HybridRetriever, provid
     match = re.match(r"(?is)^remember(?: that)?\s+(.+)$", question.strip())
     if match and memory.write_explicit(user_id, match.group(1).strip()):
         written.append(match.group(1).strip())
-    return ResearchResponse(answer=draft.answer, evidence=pack.chunks, memory_used=used, memory_written=written, abstained=draft.abstained, provider=provider.name, model=provider.model)
+    return ResearchResponse(answer=draft.answer, evidence=pack.chunks, memory_used=used, memory_written=written, abstained=draft.abstained, provider=provider.name, model=provider.model, degraded=draft.degraded, attempts=draft.attempts, error_class=draft.error_class, provider_error=draft.provider_error)
 

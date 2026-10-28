@@ -40,6 +40,11 @@ class AnswerDraft(BaseModel):
     answer: str
     cited_chunk_ids: list[str] = Field(default_factory=list)
     abstained: bool = False
+    provider_error: bool = False
+    degraded: bool = False
+    attempts: int = 0
+    error_class: str | None = None
+    trace_metadata: dict[str, str | int | bool | None] = Field(default_factory=dict)
 
 
 class ResearchResponse(BaseModel):
@@ -50,6 +55,10 @@ class ResearchResponse(BaseModel):
     abstained: bool = False
     provider: str
     model: str
+    degraded: bool = False
+    attempts: int = 0
+    error_class: str | None = None
+    provider_error: bool = False
 
 
 class MemoryRecord(BaseModel):

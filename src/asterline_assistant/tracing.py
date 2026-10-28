@@ -13,6 +13,14 @@ from langsmith import traceable
 F = TypeVar("F", bound=Callable[..., Any])
 
 
+def _trace_output(value: Any) -> Any:
+    if hasattr(value, "model_dump"):
+        output = value.model_dump(mode="json")
+        metadata = output.pop("trace_metadata", {})
+        return {"output": output, "metadata": metadata}
+    return value
+
+
 def traced(name: str) -> Callable[[F], F]:
     """Trace only when a key is configured; otherwise return a no-op decorator."""
     if not (os.getenv("LANGSMITH_API_KEY") or os.getenv("LANGCHAIN_API_KEY")):
@@ -24,7 +32,7 @@ def traced(name: str) -> Callable[[F], F]:
             safe_input = {"agent": name}
             if args and isinstance(args[0], str):
                 safe_input["text"] = args[0][:2000]
-            traced_call = traceable(name=name, run_type="chain")(lambda _: function(*args, **kwargs))
+            traced_call = traceable(name=name, run_type="chain", process_outputs=_trace_output)(lambda _: function(*args, **kwargs))
             return traced_call(json.dumps(safe_input, sort_keys=True))
 
         return wrapper  # type: ignore[return-value]

@@ -6,7 +6,12 @@ from asterline_assistant.llm import FakeLLM
 from asterline_assistant.memory import MemoryStore
 from asterline_assistant.models import EvidencePack
 from asterline_assistant.retrieval import TOKEN_RE, tokenize
-from asterline_assistant.eval_runner import abstention_pass, fact_pass, superseded_pass
+import json
+
+import pytest
+
+from asterline_assistant.eval_runner import abstention_pass, citation_pairs, fact_pass, superseded_pass
+from asterline_assistant.llm import CircuitBreaker, GeminiLLM, LLMProvider, ProviderFailure, ResilientLLM
 from asterline_assistant.models import HistoryMessage
 from asterline_assistant.research import route
 from asterline_assistant.retrieval import HybridRetriever
@@ -78,4 +83,120 @@ def test_router_rewrites_follow_up_from_history() -> None:
     query = route("And what was it before that?", [HistoryMessage(role="user", content="What is the current AQL timeout?")])
     assert "current AQL timeout" in query
     assert "before that" in query
+
+
+class FakeAPIError(Exception):
+    def __init__(self, code: int, headers: dict[str, str] | None = None) -> None:
+        super().__init__(f"{code} simulated")
+        self.code = code
+        self.headers = headers or {}
+
+
+class FakeGeminiClient:
+    def __init__(self, outcomes: list[object]) -> None:
+        self.outcomes = outcomes
+        self.calls = 0
+
+        class Models:
+            def __init__(self, owner: "FakeGeminiClient") -> None:
+                self.owner = owner
+
+            def generate_content(self, **_: object) -> object:
+                self.owner.calls += 1
+                outcome = self.owner.outcomes.pop(0)
+                if isinstance(outcome, Exception):
+                    raise outcome
+                return outcome
+
+        self.models = Models(self)
+
+
+def answer_payload(answer: str = "ready") -> object:
+    return type("Response", (), {"text": json.dumps({"answer": answer})})()
+
+
+def test_gemini_retries_503_with_bounded_backoff() -> None:
+    sleeps: list[float] = []
+    provider = GeminiLLM("test", sleep_fn=sleeps.append, random_fn=lambda: 0.0)
+    provider.client = FakeGeminiClient([FakeAPIError(503), answer_payload()])
+    result = provider.answer("q", EvidencePack(query="q", chunks=[]))
+    assert result.answer == "ready"
+    assert provider.client.calls == 2
+    assert sleeps == [1.0]
+    assert result.attempts == 2
+
+
+def test_gemini_honors_retry_after() -> None:
+    sleeps: list[float] = []
+    provider = GeminiLLM("test", sleep_fn=sleeps.append, random_fn=lambda: 0.0)
+    provider.client = FakeGeminiClient([FakeAPIError(429, {"Retry-After": "7"}), answer_payload()])
+    provider.answer("q", EvidencePack(query="q", chunks=[]))
+    assert sleeps == [7.0]
+
+
+def test_gemini_does_not_retry_configuration_error() -> None:
+    sleeps: list[float] = []
+    provider = GeminiLLM("test", sleep_fn=sleeps.append)
+    provider.client = FakeGeminiClient([FakeAPIError(400)])
+    with pytest.raises(ProviderFailure) as error:
+        provider.answer("q", EvidencePack(query="q", chunks=[]))
+    assert error.value.error_class == "HTTP400"
+    assert sleeps == []
+
+
+class StubFallback(LLMProvider):
+    name = "ollama"
+    model = "llama3.2:3b"
+
+    def __init__(self, failure: bool = False) -> None:
+        super().__init__()
+        self.failure = failure
+
+    def answer(self, question: str, evidence: EvidencePack):
+        self.calls += 1
+        if self.failure:
+            raise ProviderFailure("offline", error_class="ConnectionError", transient=True, attempts=1)
+        return type("Draft", (), {"answer": "fallback answer", "degraded": True, "trace_metadata": {}})()
+
+
+def failing_gemini() -> GeminiLLM:
+    provider = GeminiLLM("test", max_attempts=1)
+    provider.client = FakeGeminiClient([FakeAPIError(503)])
+    return provider
+
+
+def test_resilient_provider_falls_back_and_marks_degraded() -> None:
+    result = ResilientLLM(failing_gemini(), StubFallback()).answer("q", EvidencePack(query="q", chunks=[]))
+    assert result.answer == "fallback answer"
+    assert result.degraded is True
+
+
+def test_double_outage_returns_clean_message_without_traceback() -> None:
+    result = ResilientLLM(failing_gemini(), StubFallback(failure=True)).answer("q", EvidencePack(query="q", chunks=[]))
+    assert result.provider_error is True
+    assert result.answer.startswith("The language model is temporarily unavailable;")
+    assert "Traceback" not in result.answer
+
+
+def test_circuit_breaker_opens_after_three_failures() -> None:
+    breaker = CircuitBreaker(threshold=3, cooldown_seconds=60, clock=lambda: 0.0)
+    for _ in range(3):
+        provider = GeminiLLM("test", breaker=breaker, max_attempts=1)
+        provider.client = FakeGeminiClient([FakeAPIError(503)])
+        with pytest.raises(ProviderFailure):
+            provider.answer("q", EvidencePack(query="q", chunks=[]))
+    provider = GeminiLLM("test", breaker=breaker, max_attempts=1)
+    provider.client = FakeGeminiClient([answer_payload()])
+    with pytest.raises(ProviderFailure) as error:
+        provider.answer("q", EvidencePack(query="q", chunks=[]))
+    assert error.value.error_class == "CircuitOpen"
+    assert provider.client.calls == 0
+
+
+def test_citation_lists_use_only_parsed_answer_citations() -> None:
+    answer = "Current value [retention:0 — Data retention policy]."
+    cited = citation_pairs(answer)
+    retrieved = ["retention:0", "security:1"]
+    assert cited == [("retention:0", "Data retention policy")]
+    assert [chunk for chunk in retrieved if chunk not in {item[0] for item in cited}] == ["security:1"]
 

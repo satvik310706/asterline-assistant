@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .config import Settings
 from .corpus import load_corpus, validate_corpus_integrity
-from .eval_runner import run as run_eval
+from .eval_runner import citation_pairs, run as run_eval
 from .llm import make_provider
 from .memory import MemoryStore
 from .research import run_research
@@ -44,11 +44,20 @@ def main() -> None:
             raise SystemExit("ask requires a question")
         validate_corpus_integrity(settings.corpus_path)
         provider = make_provider(args.provider or settings.llm_provider, settings.gemini_model, settings.ollama_model)
-        retriever = HybridRetriever(load_corpus(settings.corpus_path), settings.chroma_path)
+        retriever = HybridRetriever(load_corpus(settings.corpus_path), settings.chroma_path, settings.fastembed_cache_path)
         response = run_research(args.question, args.user, retriever, provider, MemoryStore(settings.sqlite_path))
         print(response.answer)
         print(f"provider/model: {response.provider}/{response.model}")
-        print("citations:")
+        print(f"degraded: {response.degraded}")
+        if response.error_class:
+            print(f"provider error class: {response.error_class}")
+        cited = citation_pairs(response.answer)
+        cited_ids = {chunk_id for chunk_id, _ in cited}
+        print("cited:")
+        for chunk_id, title in cited:
+            print(f"- {chunk_id} — {title}")
+        print("retrieved (not cited):")
         for item in response.evidence:
-            print(f"- {item.chunk.chunk_id} — {item.chunk.title}")
+            if item.chunk.chunk_id not in cited_ids:
+                print(f"- {item.chunk.chunk_id} — {item.chunk.title}")
 

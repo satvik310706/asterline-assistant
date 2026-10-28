@@ -53,7 +53,11 @@ def abstention_pass(answer: str, gold_facts: list[str], forbidden_facts: list[st
 
 
 def citation_ids(answer: str) -> list[str]:
-    return re.findall(r"\[([^\s—]+)\s+—\s+[^\]]+\]", answer)
+    return [chunk_id for chunk_id, _ in citation_pairs(answer)]
+
+
+def citation_pairs(answer: str) -> list[tuple[str, str]]:
+    return re.findall(r"\[([^\s—]+)\s+—\s+([^\]]+)\]", answer)
 
 
 def _mean(values: list[float]) -> float:
@@ -62,7 +66,7 @@ def _mean(values: list[float]) -> float:
 
 def run(dataset: Path, settings: Settings) -> Path:
     validate_corpus_integrity(settings.corpus_path)
-    retriever = HybridRetriever(load_corpus(settings.corpus_path), settings.chroma_path)
+    retriever = HybridRetriever(load_corpus(settings.corpus_path), settings.chroma_path, settings.fastembed_cache_path)
     provider = make_provider(settings.llm_provider, settings.gemini_model, settings.ollama_model)
     memory = MemoryStore(settings.sqlite_path)
     rows = [json.loads(line) for line in dataset.read_text(encoding="utf-8").splitlines() if line.strip()]
@@ -71,6 +75,7 @@ def run(dataset: Path, settings: Settings) -> Path:
     cache = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.exists() else {}
     case_results: list[dict[str, Any]] = []
     category_values: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    provider_values: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
 
     for row in rows:
         started = time.perf_counter()
@@ -79,6 +84,8 @@ def run(dataset: Path, settings: Settings) -> Path:
         if key in cache:
             response = ResearchResponse.model_validate(cache[key])
         else:
+            if settings.eval_delay_seconds > 0 and case_results:
+                time.sleep(settings.eval_delay_seconds)
             history = [HistoryMessage.model_validate(item) for item in row.get("history", [])]
             response = run_research(row["question"], "eval", retriever, provider, memory, history=history)
             cache[key] = response.model_dump(mode="json")
@@ -87,37 +94,52 @@ def run(dataset: Path, settings: Settings) -> Path:
         gold = row.get("gold_chunks", [])
         reciprocal_rank = next((1 / (retrieved.index(chunk) + 1) for chunk in gold if chunk in retrieved), 0.0)
         recall = float(not gold or any(chunk in retrieved for chunk in gold))
-        facts = abstention_pass(response.answer, row.get("gold_facts", []), row.get("forbidden_facts", [])) if row.get("expected") == "abstain" else fact_pass(response.answer, row.get("gold_facts", []), row.get("forbidden_facts", []))
+        facts = None if response.provider_error else (abstention_pass(response.answer, row.get("gold_facts", []), row.get("forbidden_facts", [])) if row.get("expected") == "abstain" else fact_pass(response.answer, row.get("gold_facts", []), row.get("forbidden_facts", [])))
         superseded = superseded_pass(response.answer, row.get("superseded_facts", []))
         conflict = facts and superseded if row.get("superseded_facts") else True
         citations = citation_ids(response.answer)
         citation_valid = all(chunk_id in retrieved for chunk_id in citations)
+        cited_set = set(citations)
+        gold_set = set(gold)
+        citation_precision = len(cited_set & gold_set) / len(cited_set) if cited_set else 0.0
+        citation_recall = len(cited_set & gold_set) / len(gold_set) if gold_set else 0.0
         abstention = response.abstained == (row.get("expected") == "abstain")
         elapsed_ms = (time.perf_counter() - started) * 1000
-        checks = {"retrieval_recall_at_5": recall, "fact_accuracy": float(facts), "citation_validity": float(citation_valid), "conflict_handling": float(conflict), "abstention_accuracy": float(abstention)}
-        result = {"id": row["id"], "category": row["category"], "question": row["question"], "answer": response.answer, "cited_ids": citations, "retrieved_chunk_ids": retrieved, "checks": checks, "latency_ms": elapsed_ms, "llm_calls": calls}
+        checks = {"retrieval_recall_at_5": recall, "fact_accuracy": facts, "citation_validity": float(citation_valid), "citation_precision": citation_precision, "citation_recall": citation_recall, "conflict_handling": float(conflict), "abstention_accuracy": float(abstention)}
+        result = {"id": row["id"], "category": row["category"], "question": row["question"], "answer": response.answer, "cited": [{"chunk_id": chunk_id, "title": title} for chunk_id, title in citation_pairs(response.answer)], "retrieved_not_cited": [chunk_id for chunk_id in retrieved if chunk_id not in cited_set], "retrieved_chunk_ids": retrieved, "provider": response.provider, "model": response.model, "degraded": response.degraded, "provider_error": response.provider_error, "error_class": response.error_class, "checks": checks, "latency_ms": elapsed_ms, "llm_calls": calls}
         case_results.append(result)
+        provider_values[response.provider]["total"] += 1
+        provider_values[response.provider]["fallback"] += int(response.degraded and not response.provider_error)
+        provider_values[response.provider]["provider_error"] += int(response.provider_error)
         for metric, value in checks.items():
-            if metric != "retrieval_recall_at_5" or gold:
+            if value is not None and (metric != "retrieval_recall_at_5" or gold):
                 category_values[row["category"]][metric].append(value)
         if gold:
             category_values[row["category"]]["mrr"].append(reciprocal_rank)
 
-    overall = {metric: _mean([result["checks"][metric] for result in case_results]) for metric in ["fact_accuracy", "citation_validity", "conflict_handling", "abstention_accuracy"]}
+    metric_names = ["fact_accuracy", "citation_validity", "citation_precision", "citation_recall", "conflict_handling", "abstention_accuracy"]
+    overall = {metric: _mean([float(result["checks"][metric]) for result in case_results if result["checks"][metric] is not None]) for metric in metric_names}
     retrieval_cases = [result for result, row in zip(case_results, rows) if row.get("gold_chunks")]
     overall["recall_at_5"] = _mean([result["checks"]["retrieval_recall_at_5"] for result in retrieval_cases])
     overall["mrr"] = _mean([next((1 / (result["retrieved_chunk_ids"].index(chunk) + 1) for chunk in row.get("gold_chunks", []) if chunk in result["retrieved_chunk_ids"]), 0.0) for result, row in zip(case_results, rows) if row.get("gold_chunks")])
     overall["mean_latency_ms"] = _mean([result["latency_ms"] for result in case_results])
     overall["llm_calls_per_question"] = _mean([result["llm_calls"] for result in case_results])
     category_summary = {category: {metric: _mean(values) for metric, values in metrics.items()} for category, metrics in category_values.items()}
-    failures = [{"id": result["id"], "category": result["category"], "failed": [metric for metric, passed in result["checks"].items() if not passed], "reason": "one or more deterministic checks failed"} for result in case_results if not all(result["checks"].values())]
+    provider_errors = [{"id": result["id"], "category": result["category"], "provider": result["provider"], "error_class": result.get("error_class"), "reason": "language model providers unavailable"} for result in case_results if result["provider_error"]]
+    failures = [{"id": result["id"], "category": result["category"], "failed": [metric for metric, passed in result["checks"].items() if passed is not None and not passed], "reason": "one or more deterministic checks failed"} for result in case_results if not result["provider_error"] and any(passed is not None and not passed for passed in result["checks"].values())]
+    overall["provider_error_count"] = len(provider_errors)
+    overall["fallback_fraction"] = sum(values["fallback"] for values in provider_values.values()) / len(case_results) if case_results else 0.0
+    provider_summary = {name: {"answers": values["total"], "fallback_answers": values["fallback"], "provider_errors": values["provider_error"], "fallback_fraction": values["fallback"] / values["total"] if values["total"] else 0.0} for name, values in provider_values.items()}
     output = Path("eval/results")
     output.mkdir(parents=True, exist_ok=True)
     path = output / f"{settings.config}_{provider.name}_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
-    report = {"config": settings.config, "provider": provider.name, "model": provider.model, "cases": len(rows), "overall": overall, "by_category": category_summary, "failures": failures, "case_results": case_results}
+    report = {"config": settings.config, "provider": provider.name, "model": provider.model, "cases": len(rows), "overall": overall, "by_category": category_summary, "by_provider": provider_summary, "provider_errors": provider_errors, "failures": failures, "case_results": case_results}
     path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     cache_path.write_text(json.dumps(cache, indent=2), encoding="utf-8")
-    print(json.dumps({"config": settings.config, "provider": provider.name, "model": provider.model, "cases": len(rows), "overall": overall, "by_category": category_summary}, indent=2))
+    print(json.dumps({"config": settings.config, "provider": provider.name, "model": provider.model, "cases": len(rows), "overall": overall, "by_category": category_summary, "by_provider": provider_summary}, indent=2))
+    print("PROVIDER_ERRORS:")
+    for provider_error in provider_errors:
+        print(json.dumps(provider_error, sort_keys=True))
     print("FAILURES:")
     for failure in failures:
         print(json.dumps(failure, sort_keys=True))
