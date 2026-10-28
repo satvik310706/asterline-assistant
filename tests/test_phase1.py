@@ -10,8 +10,8 @@ import json
 
 import pytest
 
-from asterline_assistant.eval_runner import abstention_pass, citation_pairs, fact_pass, superseded_pass
-from asterline_assistant.llm import CircuitBreaker, GeminiLLM, LLMProvider, ProviderFailure, ResilientLLM
+from asterline_assistant.eval_runner import abstention_pass, cache_key, citation_pairs, fact_pass, superseded_pass
+from asterline_assistant.llm import AnswerDraft, CircuitBreaker, GeminiLLM, LLMProvider, ProviderFailure, ResilientLLM
 from asterline_assistant.models import HistoryMessage
 from asterline_assistant.research import route
 from asterline_assistant.retrieval import HybridRetriever
@@ -199,4 +199,47 @@ def test_citation_lists_use_only_parsed_answer_citations() -> None:
     retrieved = ["retention:0", "security:1"]
     assert cited == [("retention:0", "Data retention policy")]
     assert [chunk for chunk in retrieved if chunk not in {item[0] for item in cited}] == ["security:1"]
+
+
+def test_eval_cache_key_separates_provider_model_and_config() -> None:
+    evidence = EvidencePack(query="q", chunks=[])
+    row = {"question": "q"}
+    fake_key = cache_key(row, "fake", "deterministic", "baseline", evidence)
+    gemini_key = cache_key(row, "gemini", "gemini-test", "baseline", evidence)
+    improved_key = cache_key(row, "fake", "deterministic", "improved", evidence)
+    assert len({fake_key, gemini_key, improved_key}) == 3
+
+
+def test_eval_run_survives_provider_error_and_degraded_case(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from asterline_assistant import eval_runner
+    from asterline_assistant.models import CorpusChunk, RetrievedChunk
+
+    class DummyRetriever:
+        def search(self, query: str, k: int = 5) -> list[RetrievedChunk]:
+            chunk = CorpusChunk(chunk_id="test:0", doc_id="test", title="Test source", category="test", owner="test", source_url="test://0", published="20260101", version="1", text="good degraded raise answer ready.")
+            return [RetrievedChunk(chunk=chunk)]
+
+    class ScenarioProvider(LLMProvider):
+        name = "fake-scenario"
+        model = "test"
+
+        def answer(self, question: str, evidence: EvidencePack) -> AnswerDraft:
+            if "raise" in question:
+                raise ProviderFailure("simulated transient outage", error_class="HTTP503", transient=True, attempts=4)
+            if "degraded" in question:
+                return AnswerDraft(answer="The language model is temporarily unavailable; here are the most relevant sources:", provider_error=True, degraded=True, error_class="ConnectionError")
+            return AnswerDraft(answer="The answer is ready. [test:0 — Test source]", cited_chunk_ids=["test:0"], attempts=1)
+
+    dataset = tmp_path / "tiny.jsonl"
+    dataset.write_text("\n".join(json.dumps({"id": case_id, "category": "test", "question": question, "gold_chunks": ["test:0"], "gold_facts": ["ready"], "forbidden_facts": [], "expected": "answer", "notes": ""}) for case_id, question in [("good", "good"), ("degraded", "degraded"), ("raises", "raise")]), encoding="utf-8")
+    settings = Settings(corpus_path=ROOT / "data/corpus.jsonl", chroma_path=tmp_path / "chroma", fastembed_cache_path=tmp_path / "fastembed", sqlite_path=tmp_path / "memory.sqlite3", llm_provider="fake")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(eval_runner, "validate_corpus_integrity", lambda path: None)
+    monkeypatch.setattr(eval_runner, "HybridRetriever", lambda *args: DummyRetriever())
+    monkeypatch.setattr(eval_runner, "make_provider", lambda *args: ScenarioProvider())
+    result_path = eval_runner.run(dataset, settings)
+    report = json.loads(result_path.read_text(encoding="utf-8"))
+    assert report["overall"]["provider_error_count"] == 2
+    assert {case["status"] for case in report["case_results"]} == {"ok", "provider_error"}
+    assert sum(case["provider_error"] for case in report["case_results"]) == 2
 

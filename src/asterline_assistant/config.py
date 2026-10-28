@@ -22,6 +22,7 @@ class Settings(BaseModel):
     gemini_model: str = "gemini-2.5-flash"
     ollama_model: str = "llama3.2:3b"
     eval_delay_seconds: float = 0.0
+    eval_langsmith_project: str = "asterline-eval"
 
     @classmethod
     def from_environment(cls) -> "Settings":
@@ -31,5 +32,6 @@ class Settings(BaseModel):
             gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
             ollama_model=os.getenv("OLLAMA_MODEL", "llama3.2:3b"),
             eval_delay_seconds=float(os.getenv("ASTERLINE_EVAL_DELAY_SECONDS", "0")),
+            eval_langsmith_project=os.getenv("ASTERLINE_EVAL_LANGSMITH_PROJECT", "asterline-eval"),
         )
 

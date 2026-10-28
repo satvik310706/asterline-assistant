@@ -38,10 +38,10 @@ def answer(question: str, evidence: EvidencePack, provider: LLMProvider) -> Answ
     return provider.answer(question, evidence)
 
 
-def run_research(question: str, user_id: str, retriever: HybridRetriever, provider: LLMProvider, memory: MemoryStore, history: list[HistoryMessage] | None = None) -> ResearchResponse:
-    query = route(question, history)
+def run_research(question: str, user_id: str, retriever: HybridRetriever, provider: LLMProvider, memory: MemoryStore, history: list[HistoryMessage] | None = None, prepared_query: str | None = None, prepared_evidence: EvidencePack | None = None) -> ResearchResponse:
+    query = prepared_query if prepared_query is not None else route(question, history)
     used = [item.content for item in memory.list_active(user_id)]
-    pack = build_evidence(retrieve(query, retriever))
+    pack = prepared_evidence if prepared_evidence is not None else build_evidence(retrieve(query, retriever))
     draft = answer(query, pack, provider)
     written: list[str] = []
     match = re.match(r"(?is)^remember(?: that)?\s+(.+)$", question.strip())
