@@ -283,6 +283,11 @@ def test_provider_diagnostics_parse_quota_and_retry_delay_from_genai_text() -> N
     assert "retry_after=1108s" in rendered
 
 
+def test_provider_diagnostics_keep_generic_quota_class_when_detail_is_truncated() -> None:
+    error = classify_failure(Exception("429 RESOURCE_EXHAUSTED: You exceeded your current quota"))
+    assert error.quota_type == "quota"
+
+
 def test_abstention_without_citations_is_valid() -> None:
     chunk = load_corpus(ROOT / "data/corpus.jsonl")[0]
     provider = GeminiLLM("test", max_attempts=1)
