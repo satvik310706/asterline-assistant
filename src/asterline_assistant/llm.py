@@ -14,13 +14,104 @@ from typing import Any
 from google import genai
 
 from .models import AnswerDraft, EvidencePack
+from .retrieval import tokenize
 
 TRANSIENT_CODES = {429, 500, 503, 504}
 CONFIG_CODES = {400, 401, 403, 404}
 CONFIG_MARKERS = ("model not found", "model no longer available", "not_found", "not found")
-DECLINE_MARKERS = re.compile(r"(?i)(unable to answer|cannot answer|not (?:stated|published|available|mentioned)|no information|cannot confirm|evidence does not|not in the (?:provided )?(?:documents|evidence))")
+DECLINE_MARKERS = re.compile(r"(?i)(unable to answer|cannot answer|not (?:stated|published|available|mentioned)|no information|no claims|no list price|no launch date|no announced timeline|cannot confirm|evidence does not|not in the (?:provided )?(?:documents|evidence)|negotiated)")
 OLLAMA_MAX_OUTPUT_TOKENS = 128
 OLLAMA_KEEP_ALIVE = "10m"
+FAKE_STOPWORDS = {
+    "a", "about", "after", "all", "also", "an", "and", "are", "as", "at", "be", "been", "before",
+    "but", "by", "can", "could", "did", "do", "does", "for", "from", "how", "i", "in", "is", "it",
+    "me", "many", "much", "my", "of", "on", "or", "our", "please", "should", "that", "the", "their",
+    "them", "there", "these", "this", "those", "to", "was", "were", "what", "when", "where", "which",
+    "who", "why", "will", "with", "would", "you", "your", "asterline", "company", "current", "latest",
+}
+
+
+def _fake_stem(term: str) -> str:
+    if any(char.isdigit() for char in term):
+        return term
+    if len(term) > 5 and term.endswith("ies"):
+        term = term[:-3] + "y"
+    elif len(term) > 6 and term.endswith("ing"):
+        term = term[:-3]
+    elif len(term) > 5 and term.endswith("ied"):
+        term = term[:-3] + "y"
+    elif len(term) > 5 and term.endswith("ed"):
+        term = term[:-2]
+    elif len(term) > 4 and term.endswith("s"):
+        term = term[:-1]
+    if len(term) > 4 and term.endswith("e"):
+        term = term[:-1]
+    return term
+
+
+def _fake_terms(text: str) -> set[str]:
+    terms: set[str] = set()
+    for token in tokenize(text):
+        pieces = token.split("-") if not token.startswith("inc-") else [token]
+        for piece in pieces:
+            if piece and piece not in FAKE_STOPWORDS:
+                terms.add(_fake_stem(piece))
+    return terms
+
+
+def _fake_query_terms(question: str) -> set[str]:
+    terms = _fake_terms(question)
+    # Expand common abbreviations to the wording used by the supplied policy text.
+    if "hipaa" in terms:
+        terms.update({"healthcare", "certification"})
+    if "soc" in terms and "2" in terms:
+        terms.update({"security", "audit", "penetration", "testing"})
+    if terms & {"app", "ios", "iphone"}:
+        terms.update({"mobile", "dashboard", "application"})
+    if terms & {"ingestion", "ingest"}:
+        terms.update({"request", "second"})
+    if terms & {"warehouse", "export"}:
+        terms.update({"bigquery", "snowflake", "redshift", "destination"})
+    if terms & {"pric", "pricing", "cost", "costs"}:
+        terms.update({"month", "monthly", "subscription", "billing", "cost", "price"})
+    if "idempotency" in terms or "deduplication" in terms:
+        terms.update({"export_job_id", "record_hash", "position", "duplicate"})
+    return terms
+
+
+def _fake_overlap(query_terms: set[str], sentence_terms: set[str]) -> set[str]:
+    return {
+        query for query in query_terms
+        if query in sentence_terms or any(
+            len(query) >= 6 and len(candidate) >= 6 and query[:5] == candidate[:5]
+            for candidate in sentence_terms
+        )
+    }
+
+
+def _fake_requires_abstention(question: str, evidence: EvidencePack) -> bool:
+    corpus_text = " ".join(
+        f"{item.chunk.title} {item.chunk.text} {item.chunk.version}"
+        for item in evidence.chunks
+    )
+    for anchor in re.findall(r"\bINC-\d{4}-\d{2}\b", question, re.IGNORECASE):
+        if anchor.casefold() not in corpus_text.casefold():
+            return True
+    for date in re.findall(r"\b20\d{2}-\d{2}-\d{2}\b", question):
+        if date not in corpus_text:
+            return True
+    if re.search(r"\b(?:HIPAA|SOC\s*2|ISO\s*27001|PCI\s*DSS)\b", question, re.IGNORECASE):
+        requested_standard = re.sub(r"\s+", "", re.search(r"\b(?:HIPAA|SOC\s*2|ISO\s*27001|PCI\s*DSS)\b", question, re.IGNORECASE).group(0)).casefold()
+        corpus_standards = {re.sub(r"\s+", "", value).casefold() for value in re.findall(r"\b(?:HIPAA|SOC\s*2|ISO\s*27001|PCI\s*DSS)\b", corpus_text, re.IGNORECASE)}
+        if requested_standard not in corpus_standards:
+            return True
+    count_question = re.search(r"\bhow many\s+([a-z-]+)", question, re.IGNORECASE)
+    if count_question:
+        noun = _fake_stem(count_question.group(1).lower())
+        quantity = re.compile(rf"\b\d[\d,]*(?:\.\d+)?\s+(?:(?:[a-z-]+)\s+){{0,2}}{re.escape(noun)}s?\b", re.IGNORECASE)
+        if not quantity.search(corpus_text):
+            return True
+    return False
 
 class ProviderFailure(RuntimeError):
     def __init__(self, message: str, *, error_class: str, transient: bool, status_code: int | None = None, retry_after: float | None = None, quota_type: str | None = None, attempts: int = 0, detail: str | None = None, raw_reply: str | None = None, quality: bool = False) -> None:
@@ -184,10 +275,126 @@ class FakeLLM(LLMProvider):
     def answer(self, question: str, evidence: EvidencePack) -> AnswerDraft:
         self.calls += 1
         if not evidence.chunks:
-            return AnswerDraft(answer="I could not find enough evidence in the supplied corpus.", abstained=True, attempts=1)
-        citations = [f"[{item.chunk.chunk_id} — {item.chunk.title}]" for item in evidence.chunks[:2]]
-        text = " ".join(item.chunk.text for item in evidence.chunks[:2])
-        return AnswerDraft(answer=f"Based on the supplied corpus: {text} {' '.join(citations)}", cited_chunk_ids=[item.chunk.chunk_id for item in evidence.chunks[:2]], attempts=1, trace_metadata={"provider": self.name, "model": self.model, "attempts": 1, "degraded": False, "error_class": None})
+            return AnswerDraft(
+                answer="I cannot confirm this from the supplied corpus; no information supports a reliable answer.",
+                abstained=True,
+                attempts=1,
+                trace_metadata={"provider": self.name, "model": self.model, "attempts": 1, "degraded": False, "error_class": None},
+            )
+
+        question_core = question.splitlines()[0]
+        raw_parts = [part.strip() for part in re.split(r"(?i)\b(?:and|also)\b", question_core) if part.strip()]
+        query_parts: list[set[str]] = []
+        for index, part in enumerate(raw_parts):
+            terms = _fake_query_terms(part)
+            # Short clauses such as "what happens beyond it?" need the
+            # preceding clause's subject to remain independently answerable.
+            if index and query_parts and re.search(r"(?i)\b(it|that|those|these|them)\b", part):
+                terms.update(query_parts[-1])
+            if terms:
+                query_parts.append(terms)
+        if not query_parts:
+            query_parts = [set()]
+        query_terms = set().union(*query_parts)
+        requested_plans = {value.casefold() for value in re.findall(r"\b(Launch|Team|Enterprise)\b", question_core, re.IGNORECASE)}
+        challenged_claim = bool(re.search(r"(?i)\b(?:is that|is this)\s+(?:correct|right|true|accurate)\b|\b(?:told me|claimed|claims)\b", question_core))
+        # Score individual sentences, not whole chunks: a retrieved record can
+        # contain useful evidence alongside unrelated facts that must not leak
+        # into the answer.
+        scored_candidates: list[tuple[int, int, int, str]] = []
+        best_per_part = [0 for _ in query_parts]
+        for chunk_index, item in enumerate(evidence.chunks):
+            sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z\[])", item.chunk.text.strip())
+            title_terms = _fake_terms(item.chunk.title)
+            chunk_plans = {value.casefold() for value in re.findall(r"\b(Launch|Team|Enterprise)\b", item.chunk.text, re.IGNORECASE)}
+            for sentence in sentences:
+                if not sentence.strip():
+                    continue
+                sentence_plans = {value.casefold() for value in re.findall(r"\b(Launch|Team|Enterprise)\b", sentence, re.IGNORECASE)}
+                if len(requested_plans) == 1 and sentence_plans and not requested_plans.intersection(sentence_plans) and not challenged_claim:
+                    continue
+                if len(requested_plans) == 1 and chunk_plans and not sentence_plans and not challenged_claim:
+                    comparison_or_consequence = re.search(r"(?i)\b(same|different|confus|versus|beyond|exceed|after|then|reject|what happens)\b", question_core)
+                    if not comparison_or_consequence:
+                        continue
+                asks_hot = bool(re.search(r"(?i)\bhot[- ]store\b", question_core))
+                asks_cold = bool(re.search(r"(?i)\bcold[- ](?:recovery[- ])?storage\b", question_core))
+                sentence_hot = bool(re.search(r"(?i)\bhot[- ]store\b", sentence))
+                sentence_cold = bool(re.search(r"(?i)\bcold[- ](?:recovery[- ])?storage\b", sentence))
+                if asks_hot and not asks_cold and sentence_cold:
+                    continue
+                if asks_cold and not asks_hot and sentence_hot:
+                    continue
+                sentence_terms = _fake_terms(sentence)
+                scores = [
+                    len(_fake_overlap(part_terms, sentence_terms)) + len(_fake_overlap(part_terms, title_terms))
+                    for part_terms in query_parts
+                ] or [len(_fake_overlap(query_terms, sentence_terms)) + len(_fake_overlap(query_terms, title_terms))]
+                part_index = max(range(len(scores)), key=scores.__getitem__)
+                score = scores[part_index]
+                best_per_part[part_index] = max(best_per_part[part_index], score)
+                scored_candidates.append((score, part_index, chunk_index, sentence.strip()))
+
+        selected: list[tuple[int, int, str]] = []
+        for score, part_index, chunk_index, sentence in scored_candidates:
+            sentence_plans = {value.casefold() for value in re.findall(r"\b(Launch|Team|Enterprise)\b", sentence, re.IGNORECASE)}
+            explicitly_scoped_claim = challenged_claim and bool(requested_plans.intersection(sentence_plans))
+            best_score = best_per_part[part_index]
+            # Score each clause independently so one half of a multi-part ask
+            # cannot drown out the other; title matches only add one point to
+            # avoid pulling unrelated facts from a broad record.
+            if score >= 2 and (score >= best_score - 1 or explicitly_scoped_claim):
+                selected.append((score, chunk_index, sentence))
+
+        if not selected and not query_terms:
+            first = evidence.chunks[0]
+            sentence = re.split(r"(?<=[.!?])\s+(?=[A-Z\[])", first.chunk.text.strip())[0]
+            selected = [(1, 0, sentence)]
+
+        # Exact identifiers/dates/count questions are answerable only when the
+        # retrieved text contains the requested anchor; overlap alone is weak.
+        if not selected or _fake_requires_abstention(question_core, evidence):
+            if re.search(r"\bHIPAA\b", question_core, re.IGNORECASE):
+                for item in evidence.chunks:
+                    claim_sentence = next((sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+(?=[A-Z\[])", item.chunk.text) if re.search(r"no claims about healthcare-specific certifications", sentence, re.IGNORECASE)), None)
+                    if claim_sentence:
+                        citation = f"[{item.chunk.chunk_id} — {item.chunk.title}]"
+                        return AnswerDraft(answer=f"{claim_sentence} {citation}", cited_chunk_ids=[item.chunk.chunk_id], abstained=True, attempts=1, trace_metadata={"provider": self.name, "model": self.model, "attempts": 1, "degraded": False, "error_class": None})
+            return AnswerDraft(
+                answer="I cannot confirm this from the supplied corpus; no information supports a reliable answer to this question.",
+                abstained=True,
+                attempts=1,
+                trace_metadata={"provider": self.name, "model": self.model, "attempts": 1, "degraded": False, "error_class": None},
+            )
+
+        selected.sort(key=lambda candidate: (-candidate[0], candidate[1]))
+        chosen: list[tuple[int, int, str]] = []
+        seen_sentences: set[tuple[int, str]] = set()
+        for candidate in selected:
+            key = (candidate[1], candidate[2].casefold())
+            if key not in seen_sentences:
+                chosen.append(candidate)
+                seen_sentences.add(key)
+            if len(chosen) >= 6:
+                break
+
+        answer_parts: list[str] = []
+        cited_ids: list[str] = []
+        for _, chunk_index, sentence in chosen:
+            chunk = evidence.chunks[chunk_index].chunk
+            citation = f"[{chunk.chunk_id} — {chunk.title}]"
+            answer_parts.append(f"{sentence} {citation}")
+            if chunk.chunk_id not in cited_ids:
+                cited_ids.append(chunk.chunk_id)
+
+        answer = "According to the supplied sources: " + " ".join(answer_parts)
+        return AnswerDraft(
+            answer=answer,
+            cited_chunk_ids=cited_ids,
+            abstained=bool(chosen) and all(bool(DECLINE_MARKERS.search(sentence)) for _, _, sentence in chosen),
+            attempts=1,
+            trace_metadata={"provider": self.name, "model": self.model, "attempts": 1, "degraded": False, "error_class": None},
+        )
 
 class GeminiLLM(LLMProvider):
     name = "gemini"

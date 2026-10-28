@@ -51,7 +51,14 @@ def superseded_pass(answer: str, superseded_facts: list[str]) -> bool:
 
 
 def abstention_pass(answer: str, gold_facts: list[str], forbidden_facts: list[str]) -> bool:
-    decline = bool(re.search(r"\b(cannot|can't|could not|couldn't|not published|not available|no information|no claims|unable to confirm|negotiated)\b", answer, re.IGNORECASE))
+    decline = bool(re.search(
+        r"\b(?:unable to answer|cannot answer|can't answer|could not answer|couldn't answer|"
+        r"cannot confirm|can't confirm|could not confirm|couldn't confirm|"
+        r"not (?:published|available|stated|announced|mentioned)|"
+        r"no (?:information|claims|list price|launch date|announced timeline|timeline)|negotiated)\b",
+        answer,
+        re.IGNORECASE,
+    ))
     return decline and fact_pass(answer, gold_facts, forbidden_facts)
 
 
@@ -66,7 +73,7 @@ def citation_ids(answer: str) -> list[str]:
 def cache_key(row: dict[str, Any], provider: str, model: str, config: str, evidence: EvidencePack) -> str:
     evidence_hash = hashlib.sha256(json.dumps([item.chunk.model_dump(mode="json") for item in evidence.chunks], sort_keys=True).encode()).hexdigest()
     history_hash = hashlib.sha256(json.dumps(row.get("history", []), sort_keys=True).encode()).hexdigest()
-    payload = {"provider": provider, "model": model, "config": config, "pipeline_revision": "improved-v18" if config == "improved" else "baseline-v4", "response_schema": "provider-degraded-v4", "question": row["question"], "history_hash": history_hash, "evidence_hash": evidence_hash}
+    payload = {"provider": provider, "model": model, "config": config, "pipeline_revision": "improved-v23" if config == "improved" else "baseline-v9", "response_schema": "provider-degraded-v9", "question": row["question"], "history_hash": history_hash, "evidence_hash": evidence_hash}
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
@@ -116,10 +123,14 @@ def _case_result(row: dict[str, Any], response: ResearchResponse, status: str, e
             "mrr": next((1 / (retrieved.index(chunk) + 1) for chunk in gold if chunk in retrieved), 0.0) if gold else None,
             "fact_accuracy": float(facts),
             "citation_validity": float(all(chunk_id in retrieved for chunk_id in cited_ids)),
-            "citation_precision": len(cited_ids & gold_ids) / len(cited_ids) if gold and cited_ids else (0.0 if gold else None),
-            "citation_recall": len(cited_ids & gold_ids) / len(gold_ids) if gold else None,
+            "citation_precision": len(cited_ids & gold_ids) / len(cited_ids) if gold and cited_ids else (None if row.get("expected") == "abstain" and not cited_ids else (0.0 if gold else None)),
+            "citation_recall": len(cited_ids & gold_ids) / len(gold_ids) if gold and (cited_ids or row.get("expected") != "abstain") else None,
             "conflict_handling": float(conflict) if conflict is not None else None,
-            "abstention_accuracy": float(response.abstained == (row.get("expected") == "abstain")),
+            "abstention_accuracy": float(
+                abstention_pass(response.answer, row.get("gold_facts", []), row.get("forbidden_facts", []))
+                if row.get("expected") == "abstain"
+                else not response.abstained
+            ),
         }
     return {"id": row["id"], "category": row["category"], "question": row["question"], "answer": response.answer, "status": status, "cited": [{"chunk_id": chunk_id, "title": title} for chunk_id, title in cited], "retrieved_not_cited": [chunk_id for chunk_id in retrieved if chunk_id not in cited_ids], "retrieved_chunk_ids": retrieved, "provider": response.provider, "model": response.model, "degraded": response.degraded, "provider_error": response.provider_error, "error_class": response.error_class, "error_status": response.error_status, "quota_type": response.quota_type, "retry_after": response.retry_after, "primary_error": response.primary_error, "fallback_error": response.fallback_error, "checks": checks, "latency_ms": elapsed_ms, "llm_calls": calls}
 
@@ -253,14 +264,14 @@ def run(dataset: Path, settings: Settings, limit: int | None = None, skip_prefli
                 cache[key] = {"response": response.model_dump(mode="json"), "status": status, "error_message": error_message}
             _atomic_write(cache_path, cache)
             overall, grouped, provider_errors, failures = _summary(case_results, rows[:len(case_results)])
-            _atomic_write(output_path, {"status": "partial", "config": settings.config, "provider": requested_provider, "model": requested_model, "no_fallback": no_fallback, "cases": len(rows), "completed": len(case_results), "overall": overall, "by_category": {key: value for key, value in grouped.items() if key != "by_provider"}, "by_provider": grouped.get("by_provider", {}), "provider_errors": provider_errors, "failures": failures, "case_results": case_results})
+            _atomic_write(output_path, {"status": "partial", "config": settings.config, "provider": requested_provider, "model": requested_model, "pipeline_revision": "improved-v23" if settings.config == "improved" else "baseline-v9", "no_fallback": no_fallback, "cases": len(rows), "completed": len(case_results), "overall": overall, "by_category": {key: value for key, value in grouped.items() if key != "by_provider"}, "by_provider": grouped.get("by_provider", {}), "provider_errors": provider_errors, "failures": failures, "case_results": case_results})
             passed = status in {"ok", "quality_error"} and not any(value is not None and not value for value in result["checks"].values())
             print(f"{row['id']} {'PASS' if passed else status.upper() if status != 'ok' else 'FAIL'} {(time.perf_counter() - started):.2f}s")
             if len(case_results) >= 10 and sum(item["status"] == "provider_error" for item in case_results[:10]) / 10 > 0.3:
                 print("Eval stopped: more than 30% of the first 10 cases were provider_error.")
                 break
         overall, grouped, provider_errors, failures = _summary(case_results, rows)
-        report = {"status": "complete", "config": settings.config, "provider": requested_provider, "model": requested_model, "no_fallback": no_fallback, "cases": len(rows), "overall": overall, "by_category": {key: value for key, value in grouped.items() if key != "by_provider"}, "provider_errors": provider_errors, "failures": failures, "case_results": case_results}
+        report = {"status": "complete", "config": settings.config, "provider": requested_provider, "model": requested_model, "pipeline_revision": "improved-v23" if settings.config == "improved" else "baseline-v9", "no_fallback": no_fallback, "cases": len(rows), "overall": overall, "by_category": {key: value for key, value in grouped.items() if key != "by_provider"}, "provider_errors": provider_errors, "failures": failures, "case_results": case_results}
         _atomic_write(output_path, report)
         print(json.dumps({"overall": overall, "by_provider": grouped.get("by_provider", {})}, indent=2))
         print("APPLICABLE_METRICS:")

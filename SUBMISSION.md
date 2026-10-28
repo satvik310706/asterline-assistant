@@ -1,7 +1,9 @@
-# Asterline Assistant — Take-home submission
+# Asterline Assistant — Take-Home Assessment
 
+Name: Satvik Pedamallu
+NIAT ID: N24H01A0514
 Repository: https://github.com/satvik310706/asterline-assistant
-LangSmith traces: [PASTE_SHARED_TRACE_LINKS_HERE]
+LangSmith traces: https://smith.langchain.com/o/34ea5156-f488-4661-b611-d4fa3993ddf4/a/asterline-assistant/projects/p/e99ab585-0198-416a-b09f-471470f3df09
 
 ## Executive summary
 A research assistant that answers only from an immutable corpus, cites evidence,
@@ -62,18 +64,18 @@ baseline_ollama.json: provider=ollama config=baseline cases=80
   fallback_fraction: 0.0 (74/80 applicable)
 improved_fake.json: provider=fake config=improved cases=80
   model: deterministic
-  fallback disabled: True
-  retrieval_recall_at_5: 0.9358974358974359 (78/80 applicable)
-  mrr: 0.7049145299145301 (78/80 applicable)
-  fact_accuracy: 0.775 (80/80 applicable)
-  citation_validity: 0.975 (80/80 applicable)
-  citation_precision: 0.6217948717948718 (78/80 applicable)
-  citation_recall: 0.7713675213675213 (78/80 applicable)
+  fallback disabled: False
+  retrieval_recall_at_5: 1.0 (78/80 applicable)
+  mrr: 0.7713675213675215 (78/80 applicable)
+  fact_accuracy: 1.0 (80/80 applicable)
+  citation_validity: 1.0 (80/80 applicable)
+  citation_precision: 0.8506493506493507 (77/80 applicable)
+  citation_recall: 0.9437229437229437 (77/80 applicable)
   conflict_handling: 1.0 (7/80 applicable)
-  abstention_accuracy: 0.9125 (80/80 applicable)
+  abstention_accuracy: 1.0 (80/80 applicable)
   provider_error_count: 0
   eval_error_count: 0
-  llm_calls_per_question: 0.6875
+  llm_calls_per_question: 0.625
   fallback_fraction: 0.0 (80/80 applicable)
 improved_ollama.json: provider=ollama config=improved cases=80
   model: llama3.2:3b

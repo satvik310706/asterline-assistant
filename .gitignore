@@ -17,6 +17,9 @@ eval/results/
 .vscode/
 /.asterline-clone-*/
 /screenshots/
+/SUBMISSION.html
+/submission_preview.png
+/header_card_verified.png
 /browser_proof_*.png
 /browser_turn*.png
 /port_8502_direct.png

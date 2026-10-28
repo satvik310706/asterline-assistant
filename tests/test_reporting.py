@@ -74,6 +74,7 @@ def test_eval_renderer_computes_only_provider_matched_pair_deltas(tmp_path: Path
             "provider": "ollama",
             "model": "llama3.2:3b",
             "config": config,
+            "pipeline_revision": "test-v1",
             "cases": 1,
             "overall": {},
             "by_category": {"arithmetic": {"fact_accuracy": {"value": score, "applicable": 10, "total": 13}}},

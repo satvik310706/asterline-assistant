@@ -9,18 +9,22 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 11 0 R >> >> /Contents 4 0 R >>
 endobj
 4 0 obj
-<< /Length 2489 >>
+<< /Length 2548 >>
 stream
 BT
 /F1 9 Tf
 45 760 Td
-(# Asterline Assistant ? Take-home submission) Tj
+(# Asterline Assistant ? Take-Home Assessment) Tj
 0 -15 Td
 () Tj
 0 -15 Td
+(Name: Satvik Pedamallu) Tj
+0 -15 Td
+(NIAT ID: N24H01A0514) Tj
+0 -15 Td
 (Repository: https://github.com/satvik310706/asterline-assistant) Tj
 0 -15 Td
-(LangSmith traces: [PASTESHAREDTRACELINKSHERE]) Tj
+(LangSmith traces: https://smith.langchain.com/o/34ea5156-f488-4661-b611-d4fa3993ddf4/a/asterline-assistant/pro) Tj
 0 -15 Td
 () Tj
 0 -15 Td
@@ -102,10 +106,6 @@ BT
 0 -15 Td
 (  providererrorcount: 62) Tj
 0 -15 Td
-(  evalerrorcount: 0) Tj
-0 -15 Td
-(  llmcallsperquestion: 1.5625) Tj
-0 -15 Td
 ET
 endstream
 endobj
@@ -113,11 +113,15 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 11 0 R >> >> /Contents 6 0 R >>
 endobj
 6 0 obj
-<< /Length 2660 >>
+<< /Length 2613 >>
 stream
 BT
 /F1 9 Tf
 45 760 Td
+(  evalerrorcount: 0) Tj
+0 -15 Td
+(  llmcallsperquestion: 1.5625) Tj
+0 -15 Td
 (  fallbackfraction: 0.0 \(18/80 applicable\)) Tj
 0 -15 Td
 (baselineollama.json: provider=ollama config=baseline cases=80) Tj
@@ -154,29 +158,29 @@ BT
 0 -15 Td
 (  model: deterministic) Tj
 0 -15 Td
-(  fallback disabled: True) Tj
+(  fallback disabled: False) Tj
 0 -15 Td
-(  retrievalrecallat5: 0.9358974358974359 \(78/80 applicable\)) Tj
+(  retrievalrecallat5: 1.0 \(78/80 applicable\)) Tj
 0 -15 Td
-(  mrr: 0.7049145299145301 \(78/80 applicable\)) Tj
+(  mrr: 0.7713675213675215 \(78/80 applicable\)) Tj
 0 -15 Td
-(  factaccuracy: 0.775 \(80/80 applicable\)) Tj
+(  factaccuracy: 1.0 \(80/80 applicable\)) Tj
 0 -15 Td
-(  citationvalidity: 0.975 \(80/80 applicable\)) Tj
+(  citationvalidity: 1.0 \(80/80 applicable\)) Tj
 0 -15 Td
-(  citationprecision: 0.6217948717948718 \(78/80 applicable\)) Tj
+(  citationprecision: 0.8506493506493507 \(77/80 applicable\)) Tj
 0 -15 Td
-(  citationrecall: 0.7713675213675213 \(78/80 applicable\)) Tj
+(  citationrecall: 0.9437229437229437 \(77/80 applicable\)) Tj
 0 -15 Td
 (  conflicthandling: 1.0 \(7/80 applicable\)) Tj
 0 -15 Td
-(  abstentionaccuracy: 0.9125 \(80/80 applicable\)) Tj
+(  abstentionaccuracy: 1.0 \(80/80 applicable\)) Tj
 0 -15 Td
 (  providererrorcount: 0) Tj
 0 -15 Td
 (  evalerrorcount: 0) Tj
 0 -15 Td
-(  llmcallsperquestion: 0.6875) Tj
+(  llmcallsperquestion: 0.625) Tj
 0 -15 Td
 (  fallbackfraction: 0.0 \(80/80 applicable\)) Tj
 0 -15 Td
@@ -206,10 +210,6 @@ BT
 0 -15 Td
 (  evalerrorcount: 0) Tj
 0 -15 Td
-(  llmcallsperquestion: 1.2875) Tj
-0 -15 Td
-(  fallbackfraction: 0.0 \(71/80 applicable\)) Tj
-0 -15 Td
 ET
 endstream
 endobj
@@ -217,11 +217,15 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 11 0 R >> >> /Contents 8 0 R >>
 endobj
 8 0 obj
-<< /Length 2630 >>
+<< /Length 2688 >>
 stream
 BT
 /F1 9 Tf
 45 760 Td
+(  llmcallsperquestion: 1.2875) Tj
+0 -15 Td
+(  fallbackfraction: 0.0 \(71/80 applicable\)) Tj
+0 -15 Td
 (memoryfake.json: provider=fake scenarios=34 passed=34/34) Tj
 0 -15 Td
 (  memorywriteprecision: 1.0 \(aggregate over 34 scenarios\)) Tj
@@ -310,10 +314,6 @@ BT
 0 -15 Td
 () Tj
 0 -15 Td
-(## Author edits) Tj
-0 -15 Td
-() Tj
-0 -15 Td
 ET
 endstream
 endobj
@@ -321,11 +321,15 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 11 0 R >> >> /Contents 10 0 R >>
 endobj
 10 0 obj
-<< /Length 1022 >>
+<< /Length 1067 >>
 stream
 BT
 /F1 9 Tf
 45 760 Td
+(## Author edits) Tj
+0 -15 Td
+() Tj
+0 -15 Td
 (Add any additional tools, prompts, or review details here before submission.) Tj
 0 -15 Td
 () Tj
@@ -383,15 +387,15 @@ xref
 0000000058 00000 n 
 0000000133 00000 n 
 0000000260 00000 n 
-0000002801 00000 n 
-0000002928 00000 n 
-0000005640 00000 n 
-0000005767 00000 n 
-0000008449 00000 n 
-0000008577 00000 n 
-0000009652 00000 n 
+0000002860 00000 n 
+0000002987 00000 n 
+0000005652 00000 n 
+0000005779 00000 n 
+0000008519 00000 n 
+0000008647 00000 n 
+0000009767 00000 n 
 trailer
 << /Size 12 /Root 1 0 R >>
 startxref
-9723
+9838
 %%EOF

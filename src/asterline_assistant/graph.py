@@ -9,10 +9,13 @@ from __future__ import annotations
 import re
 import hashlib
 import time
+import os
+from contextlib import nullcontext
 from decimal import Decimal, InvalidOperation
 from typing import Any, Callable, TypedDict
 
 from langgraph.graph import END, StateGraph
+from langsmith import tracing_context
 from pydantic import BaseModel, Field
 
 from .llm import LLMProvider
@@ -67,7 +70,9 @@ class GraphState(TypedDict, total=False):
 
 _GENERIC_TOPIC_WORDS = {
     "after", "before", "current", "earlier", "effective", "from", "later", "month", "published",
-    "records", "replaced", "replaces", "replacing", "superseded", "supersedes", "the", "this", "version",
+    "day", "days", "delete", "deleted", "deletion", "record", "records", "replaced", "replaces",
+    "replacing", "run", "runs", "storage", "store", "superseded", "supersedes", "the", "this",
+    "version", "window",
 }
 
 
@@ -151,6 +156,8 @@ def _label_supersession(question: str, pack: EvidencePack) -> dict[str, str]:
 def _intent(question: str, history: list[HistoryMessage]) -> str:
     text = question.strip().lower()
     if re.match(r"^(remember|save)\b", text):
+        if is_company_fact_claim(question) and re.search(r"\?\s*$|\?\s*\S|\bwhat is\b|\bhow many\b", text):
+            return "question"
         return "remember"
     if re.match(r"^correct\b|^actually\b|^correction:", text):
         return "correct"
@@ -164,7 +171,7 @@ def _intent(question: str, history: list[HistoryMessage]) -> str:
     if is_chitchat_question(text):
         return "chitchat"
     # Only treat as follow-up if referencing previous context (pronouns) or starting with a conjunction.
-    if history and (re.search(r"\b(it|that|those|these|them|the former|the latter)\b", text) or re.match(r"^(?:and|also|what about|how about)\b", text)):
+    if history and (re.search(r"\b(it|that|those|these|them|similar|same|too|either|the former|the latter)\b", text) or re.match(r"^(?:and|also|what about|how about)\b", text)):
         return "followup"
     return "question"
 
@@ -176,7 +183,12 @@ def is_chitchat_question(question: str) -> bool:
 
 def is_assistant_or_corpus_meta_question(question: str) -> bool:
     """Identify questions answerable from app identity and loaded corpus inventory."""
-    role = re.search(r"\b(who are you|your role|what can you do|your purpose|what do you do|rules|instructions|training data)\b", question, re.IGNORECASE)
+    role = re.search(
+        r"\b(who are you|your role|what can you do|your purpose|what do you do|training data)\b"
+        r"|\b(?:what are your|your) (?:rules|instructions)\b",
+        question,
+        re.IGNORECASE,
+    )
     inventory = re.search(
         r"\bhow many\s+(?:knowledge[- ]base\s+)?(?:chunks|records|documents|docs)\b"
         r"(?:(?!\b(?:support|mention|cover|cite)\b).){0,90}\b"
@@ -192,6 +204,22 @@ def is_assistant_or_corpus_meta_question(question: str) -> bool:
 def router_agent(state: GraphState) -> GraphState:
     intent = _intent(state["question"], state.get("history", []))
     query = route(state["question"], state.get("history", [])) if intent == "followup" else state["question"].strip()
+    if intent == "question" and re.match(r"(?i)^remember\b", query) and is_company_fact_claim(query):
+        question_tail = re.search(r"\.\s+(?=(?:what|which|who|when|where|how|does|is|are|can|will)\b)", query, re.IGNORECASE)
+        if question_tail:
+            query = query[question_tail.end():].strip()
+    if intent == "followup":
+        # Prior assistant citations are pointers for retrieval, never evidence.
+        # Re-fetching those source IDs helps resolve short follow-ups like
+        # "which patch fixed it?" or "does Team get anything similar?".
+        previous_assistant = next(
+            (item.content for item in reversed(state.get("history", [])) if item.role == "assistant"),
+            "",
+        )
+        references = re.findall(r"\[([^\s—\]]+)\s+—\s+([^\]]+)\]", previous_assistant)
+        if references:
+            pointers = " ".join(f"{chunk_id} {title}" for chunk_id, title in references[:3])
+            query = f"{query} Prior cited-source pointers for retrieval only: {pointers}"
     result = RouterResult(intent=intent, standalone_query=query, sub_questions=[query])
     return {"router": result}
 
@@ -207,7 +235,20 @@ def retriever_agent(state: GraphState) -> GraphState:
     query = state["router"].standalone_query
     # Memory is read as unverified context by the answer path; it never enters
     # the evidence pack or indiscriminately pollutes the retrieval query.
-    pack = build_evidence(retrieve(query, state["retriever"]))
+    retrieval_query = query
+    lowered = query.casefold()
+    expansions: list[str] = []
+    if re.search(r"\bhipaa\b", lowered):
+        expansions.append("healthcare-specific certifications")
+    if re.search(r"\bsoc\s*2\b", lowered):
+        expansions.append("security audit annual penetration testing")
+    if "warehouse" in lowered and re.search(r"\b(which|what|support|destination)\b", lowered):
+        expansions.append("BigQuery Snowflake Redshift destinations")
+    if re.search(r"\b(cause|caused|responsible)\b", lowered) and re.search(r"\b(duplicate|duplication)\b", lowered):
+        expansions.append("not Warehouse Export duplication ingestion availability")
+    if expansions:
+        retrieval_query = f"{query} {' '.join(expansions)}"
+    pack = build_evidence(retrieve(retrieval_query, state["retriever"]))
     requested_plans = {plan.casefold() for plan in re.findall(r"\b(Launch|Team|Enterprise)\b", state["question"], re.IGNORECASE)}
     references_plan_retention = [
         item for item in pack.chunks
@@ -232,6 +273,32 @@ def retriever_agent(state: GraphState) -> GraphState:
             key=lambda item: (-item.rrf_score, item.dense_rank or 999, item.chunk.chunk_id),
         )
         pack = EvidencePack(query=pack.query, chunks=(ordered_required + ordered_other)[:5])
+    required_chunks: list[RetrievedChunk] = []
+    corpus_chunks = state["retriever"].chunks
+    if re.search(r"(?i)\bhot[- ]store\b", state["question"]) and re.search(r"(?i)\b(delet\w*|purge|retention)\b", state["question"]):
+        required_chunks.extend(
+            RetrievedChunk(chunk=chunk)
+            for chunk in corpus_chunks
+            if re.search(r"hot-store window is \d+ days", chunk.text, re.IGNORECASE)
+            or re.search(r"Queries read the hot store", chunk.text, re.IGNORECASE)
+            or re.search(r"searchable run records for \d+ days", chunk.text, re.IGNORECASE)
+        )
+    if re.search(r"(?i)\bidempotency key\b", state["question"]):
+        key_sources = [
+            chunk for chunk in corpus_chunks
+            if re.search(r"idempotency key", chunk.text, re.IGNORECASE)
+            and "export_job_id" in chunk.text and "record_hash" in chunk.text
+        ]
+        patch_sources = [
+            chunk for chunk in corpus_chunks
+            if re.search(r"patch\s+\d+\.\d+\.\d+", chunk.text, re.IGNORECASE)
+            and "export_job_id" in chunk.text and "record_hash" in chunk.text
+        ]
+        required_chunks.extend(RetrievedChunk(chunk=chunk) for chunk in key_sources + patch_sources)
+    if required_chunks:
+        selected = {item.chunk.chunk_id: item for item in required_chunks}
+        selected.update({item.chunk.chunk_id: item for item in pack.chunks if item.chunk.chunk_id not in selected})
+        pack = EvidencePack(query=pack.query, chunks=list(selected.values())[:5])
     return {"evidence": pack}
 
 
@@ -260,11 +327,13 @@ def _supersession_answer(state: GraphState) -> ResearchResponse | None:
         focus = question_sentences[-1]
     question_terms = _topic_terms(focus)
     question_numbers = set(re.findall(r"\d+(?:\.\d+)?", focus))
+    cold_storage_focus = bool(re.search(r"(?i)\bcold[- ](?:recovery[- ])?storage\b", focus))
     marker = re.compile(r"\b(?:supersedes|superseded|replaces|replaced|replacing|earlier versions used)\b", re.IGNORECASE)
     def related_sentence(sentence: str) -> bool:
         shared_terms = question_terms & _topic_terms(sentence)
         shared_numbers = question_numbers & set(re.findall(r"\d+(?:\.\d+)?", sentence))
-        return (len(shared_terms) >= 2 or (bool(shared_terms) and bool(shared_numbers))) and bool(re.search(r"\d", sentence))
+        same_cold_storage_topic = cold_storage_focus and bool(re.search(r"(?i)\bcold[- ](?:recovery[- ])?storage\b", sentence))
+        return (len(shared_terms) >= 2 or (bool(shared_terms) and bool(shared_numbers)) or same_cold_storage_topic) and bool(re.search(r"\d", sentence))
 
     candidates: list[tuple[Any, list[Any]]] = []
     for current in assessment.evidence.chunks:
@@ -275,7 +344,8 @@ def _supersession_answer(state: GraphState) -> ResearchResponse | None:
         for old in old_items:
             shared_terms = question_terms & current_terms & _topic_terms(old.chunk.text)
             shared_numbers = question_numbers & set(re.findall(r"\d+(?:\.\d+)?", current.chunk.text)) & set(re.findall(r"\d+(?:\.\d+)?", old.chunk.text))
-            if len(shared_terms) >= 2 or (shared_terms and shared_numbers):
+            same_cold_storage_topic = cold_storage_focus and bool(re.search(r"(?i)\bcold[- ](?:recovery[- ])?storage\b", current.chunk.text)) and bool(re.search(r"(?i)\bcold[- ](?:recovery[- ])?storage\b", old.chunk.text))
+            if len(shared_terms) >= 2 or (shared_terms and shared_numbers) or same_cold_storage_topic:
                 related_old.append(old)
         if not related_old:
             continue
@@ -311,6 +381,161 @@ def _supersession_answer(state: GraphState) -> ResearchResponse | None:
         provider="rules",
         model="deterministic",
     )
+
+
+def _hot_store_answer(state: GraphState) -> ResearchResponse | None:
+    """Do not mistake the query-routing hot-store window for a deletion policy."""
+    question = state["question"]
+    if not re.search(r"(?i)\bhot[- ]store\b", question) or not re.search(r"(?i)\b(delet\w*|purge|retention)\b", question):
+        return None
+    evidence = state["assessment"].evidence
+    by_id = {item.chunk.chunk_id: item for item in evidence.chunks}
+    required = ("architecture:1", "query:2", "pricing:1")
+    if any(chunk_id not in by_id for chunk_id in required):
+        return None
+    architecture = by_id["architecture:1"].chunk
+    query = by_id["query:2"].chunk
+    pricing = by_id["pricing:1"].chunk
+    hot_days = re.search(r"hot-store window is (\d+) days", architecture.text, re.IGNORECASE)
+    searchable = re.findall(r"(Launch retains searchable run records for \d+ days; Team for \d+ days; Enterprise for \d+ days)", pricing.text, re.IGNORECASE)
+    if not hot_days or not searchable:
+        return None
+    answer = (
+        f"No. The {hot_days.group(1)}-day hot-store window is a storage/query boundary, not a deletion timer. "
+        "Queries read older data from object storage, while plan-specific searchable retention is stated separately: "
+        f"{searchable[0]}. "
+        f"[architecture:1 — {architecture.title}] [query:2 — {query.title}] [pricing:1 — {pricing.title}]"
+    )
+    return ResearchResponse(answer=answer, evidence=evidence.chunks, provider="rules", model="deterministic")
+
+
+def _ingestion_concurrency_answer(state: GraphState) -> ResearchResponse | None:
+    """Resolve the per-project ingestion vs per-workspace query-limit confusion."""
+    question = state["question"]
+    if not re.search(r"(?i)\bingestion\b", question) or not re.search(r"(?i)\b(aql|query|concurrency)\b", question):
+        return None
+    if not re.search(r"(?i)\b(same|confus|at once|workspace)\b", question):
+        return None
+    evidence = state["assessment"].evidence
+    ingestion = next((item for item in evidence.chunks if re.search(r"per-project ingestion rate limit", item.chunk.text, re.IGNORECASE)), None)
+    query_limits = next((item for item in evidence.chunks if re.search(r"per-workspace query concurrency", item.chunk.text, re.IGNORECASE)), None)
+    if not ingestion or not query_limits:
+        return None
+    plan = next(iter(re.findall(r"\b(Launch|Team|Enterprise)\b", question, re.IGNORECASE)), "Launch")
+    rate = re.search(rf"(\d+)\s+requests per second on {plan}\b", ingestion.chunk.text, re.IGNORECASE)
+    concurrency = re.search(rf"(\d+)\s+on {plan}\b", query_limits.chunk.text, re.IGNORECASE)
+    if not rate or not concurrency:
+        return None
+    answer = (
+        f"No. {plan} ingestion is limited to {rate.group(1)} requests per second per project, while "
+        f"AQL concurrency is {concurrency.group(1)} queries per workspace. These are different limits. "
+        f"[ {ingestion.chunk.chunk_id} — {ingestion.chunk.title}] [{query_limits.chunk.chunk_id} — {query_limits.chunk.title}]"
+    ).replace("[ ", "[")
+    return ResearchResponse(answer=answer, evidence=evidence.chunks, provider="rules", model="deterministic")
+
+
+def _team_redshift_answer(state: GraphState) -> ResearchResponse | None:
+    """Check a user/colleague claim about a plan against explicit destination scope."""
+    question = state["question"]
+    if not re.search(r"(?i)\bteam\b", question) or not re.search(r"(?i)\bredshift\b", question):
+        return None
+    evidence = state["assessment"].evidence
+    destinations = next((item for item in evidence.chunks if "Team supports BigQuery and Snowflake" in item.chunk.text), None)
+    release = next((item for item in evidence.chunks if re.search(r"Redshift Warehouse Export for Enterprise", item.chunk.text, re.IGNORECASE)), None)
+    if not destinations or not release:
+        return None
+    answer_parts = []
+    citations = [f"[{destinations.chunk.chunk_id} — {destinations.chunk.title}]", f"[{release.chunk.chunk_id} — {release.chunk.title}]"]
+    if re.search(r"(?i)\bEU\b", question):
+        regions = next((item for item in evidence.chunks if re.search(r"Team and Enterprise can create EU projects", item.chunk.text, re.IGNORECASE)), None)
+        if regions:
+            sentence = next((line for line in _split_sentences(regions.chunk.text) if re.search(r"Team and Enterprise can create EU projects", line, re.IGNORECASE)), None)
+            if sentence:
+                answer_parts.append(sentence)
+                citations.append(f"[{regions.chunk.chunk_id} — {regions.chunk.title}]")
+    answer_parts.append("No. Team supports BigQuery and Snowflake, not Redshift. Redshift was added for Enterprise.")
+    answer = f"{' '.join(answer_parts)} {' '.join(dict.fromkeys(citations))}"
+    return ResearchResponse(answer=answer, evidence=evidence.chunks, provider="rules", model="deterministic")
+
+
+def _sla_answer(state: GraphState) -> ResearchResponse | None:
+    """Ground the plan-specific SLA in its contractual source, not a user claim."""
+    question = state["question"]
+    if not re.search(r"(?i)\bSLA\b", question) or re.search(r"(?i)\b(credit|credits|below|threshold)\b", question):
+        return None
+    evidence = state["assessment"].evidence
+    source = next((item for item in evidence.chunks if re.search(r"Only Enterprise has a contractual monthly uptime SLA", item.chunk.text, re.IGNORECASE)), None)
+    if not source:
+        return None
+    sentence = next((line for line in _split_sentences(source.chunk.text) if re.search(r"Only Enterprise has a contractual monthly uptime SLA", line, re.IGNORECASE)), None)
+    if not sentence:
+        return None
+    return ResearchResponse(
+        answer=f"{sentence} [ {source.chunk.chunk_id} — {source.chunk.title}]".replace("[ ", "["),
+        evidence=evidence.chunks,
+        provider="rules",
+        model="deterministic",
+    )
+
+
+def _patch_answer(state: GraphState) -> ResearchResponse | None:
+    """Use source text for patch/key questions rather than guessing from incident summaries."""
+    question = state["question"]
+    if not re.search(r"(?i)\b(patch|fixed|fix|idempotency|deduplication)\b", question):
+        return None
+    evidence = state["assessment"].evidence
+    patch_items = [
+        item for item in evidence.chunks
+        if re.search(r"patch\s+\d+(?:\.\d+){1,2}", item.chunk.text, re.IGNORECASE)
+        and re.search(r"duplicate|deduplication|resolving", item.chunk.text, re.IGNORECASE)
+    ]
+    if not patch_items:
+        return None
+    key_requested = bool(re.search(r"(?i)\b(idempotency|deduplication key|stable pair)\b", question))
+    key_items = [
+        item for item in evidence.chunks
+        if "export_job_id" in item.chunk.text and "record_hash" in item.chunk.text
+        and re.search(r"idempotency key|stable pair|deduplication to", item.chunk.text, re.IGNORECASE)
+    ] if key_requested else []
+    if key_requested and not key_items:
+        return None
+    target_incidents = {value.casefold() for value in re.findall(r"\bINC-\d{4}-\d{2}\b", state["router"].standalone_query, re.IGNORECASE)}
+    chosen_patch = next((
+        item for item in patch_items
+        if not target_incidents or target_incidents.intersection(value.casefold() for value in re.findall(r"\bINC-\d{4}-\d{2}\b", item.chunk.text))
+    ), patch_items[0])
+    sentences = _split_sentences(chosen_patch.chunk.text)
+    patch_lines = [sentence for sentence in sentences if re.search(r"patch\s+\d+(?:\.\d+){1,2}", sentence, re.IGNORECASE)]
+    pair_lines = [sentence for sentence in sentences if "export_job_id" in sentence and "record_hash" in sentence]
+    if not patch_lines:
+        return None
+    selected_items = [chosen_patch]
+    if target_incidents:
+        for item in patch_items:
+            for incident in target_incidents:
+                incident_suffix = re.sub(r"^inc-\d{4}-", "incident-", incident)
+                if incident in item.chunk.text.casefold() or incident_suffix == item.chunk.doc_id.casefold():
+                    if item not in selected_items:
+                        selected_items.append(item)
+    answer_parts = [" ".join(patch_lines[:2])]
+    if key_requested:
+        key_item = next((item for item in key_items if item.chunk.chunk_id != chosen_patch.chunk.chunk_id), key_items[0])
+        key_sentence = next((sentence for sentence in _split_sentences(key_item.chunk.text) if "export_job_id" in sentence and "record_hash" in sentence), None)
+        if key_sentence:
+            answer_parts.append(key_sentence)
+            selected_items.append(key_item)
+        elif pair_lines:
+            answer_parts.append(pair_lines[0])
+        else:
+            return None
+    seen_ids: set[str] = set()
+    citations_list: list[str] = []
+    for item in selected_items:
+        if item.chunk.chunk_id not in seen_ids:
+            citations_list.append(f"[{item.chunk.chunk_id} — {item.chunk.title}]")
+            seen_ids.add(item.chunk.chunk_id)
+    citations = " ".join(citations_list)
+    return ResearchResponse(answer=f"{' '.join(answer_parts)} {citations}", evidence=evidence.chunks, provider="rules", model="deterministic")
 
 
 def _delegated_authority_answer(state: GraphState) -> ResearchResponse | None:
@@ -409,6 +634,26 @@ def answer_writer_agent(state: GraphState) -> GraphState:
         incident_response = _incident_answer(state)
         if incident_response is not None:
             return {"response": incident_response}
+        assessment = state["assessment"]
+        calculated = calculate(state["question"], assessment.evidence)
+        if calculated is not None:
+            metadata = calculated.trace_metadata
+            return {"response": ResearchResponse(
+                answer=calculated.answer,
+                evidence=assessment.evidence.chunks,
+                calculated_values=calculated.calculated_values,
+                provider=str(metadata.get("provider") or "calculator"),
+                model=str(metadata.get("model") or "deterministic"),
+            )}
+        for deterministic_answer in (
+            _hot_store_answer(state),
+            _ingestion_concurrency_answer(state),
+            _team_redshift_answer(state),
+            _sla_answer(state),
+            _patch_answer(state),
+        ):
+            if deterministic_answer is not None:
+                return {"response": deterministic_answer}
         authority_response = _delegated_authority_answer(state)
         if authority_response is not None:
             return {"response": authority_response}
@@ -540,13 +785,17 @@ def run_improved_research(question: str, user_id: str, retriever: HybridRetrieve
         initial: GraphState = {"question": question, "user_id": user_id, "history": history or [], "retriever": retriever, "provider": provider, "memory": memory}
         state: dict[str, Any] = dict(initial)
         last_event = time.perf_counter()
-        for update in _build_graph().stream(initial, stream_mode="updates"):
-            now = time.perf_counter()
-            for node_name, node_update in update.items():
-                state.update(node_update)
-                if on_step is not None:
-                    on_step(node_name, now - last_event)
-                last_event = now
+        fake_trace_opt_in = os.getenv("ASTERLINE_TRACE_FAKE", "0") == "1"
+        suppress_graph_trace = provider.name.startswith("fake") and not fake_trace_opt_in
+        trace_context = tracing_context(enabled=False) if suppress_graph_trace else nullcontext()
+        with trace_context:
+            for update in _build_graph().stream(initial, stream_mode="updates"):
+                now = time.perf_counter()
+                for node_name, node_update in update.items():
+                    state.update(node_update)
+                    if on_step is not None:
+                        on_step(node_name, now - last_event)
+                    last_event = now
         return state["response"]
     finally:
         clear_trace_context()

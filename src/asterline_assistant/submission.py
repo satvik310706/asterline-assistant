@@ -6,6 +6,11 @@ import json
 import re
 from pathlib import Path
 
+NAME = "Satvik Pedamallu"
+NIAT_ID = "N24H01A0514"
+GITHUB_URL = "https://github.com/satvik310706/asterline-assistant"
+LANGSMITH_URL = "https://smith.langchain.com/o/34ea5156-f488-4661-b611-d4fa3993ddf4/a/asterline-assistant/projects/p/e99ab585-0198-416a-b09f-471470f3df09"
+
 
 def _pdf_escape(text: str) -> str:
     return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
@@ -44,19 +49,66 @@ def _write_simple_pdf(path: Path, lines: list[str]) -> None:
     path.write_bytes(output)
 
 
+def _generate_rich_pdf(output_pdf: Path, root: Path) -> bool:
+    """Render publication-grade PDF using Playwright Chromium if available."""
+    try:
+        from playwright.sync_api import sync_playwright
+
+        html_script = root / "scripts" / "generate_submission_pdf.py"
+        if not html_script.exists():
+            return False
+
+        # Read template from script
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("pdf_gen", str(html_script))
+        if spec is None or spec.loader is None:
+            return False
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        html_content = getattr(mod, "HTML_TEMPLATE", "")
+        if not html_content:
+            return False
+
+        html_path = root / "SUBMISSION.html"
+        html_path.write_text(html_content, encoding="utf-8")
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(
+                executable_path=r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                headless=True,
+            )
+            page = browser.new_page()
+            page.set_content(html_content, wait_until="networkidle")
+            page.pdf(
+                path=str(output_pdf),
+                format="A4",
+                print_background=True,
+                display_header_footer=False,
+                margin={"top": "14mm", "bottom": "14mm", "left": "12mm", "right": "12mm"}
+            )
+            browser.close()
+        return True
+    except Exception:
+        return False
+
+
 def build_submission(root: Path = Path(".")) -> tuple[Path, Path]:
     final = root / "eval" / "final"
     reports = []
-    for path in sorted(final.glob("*.json")):
-        reports.append((path.name, json.loads(path.read_text(encoding="utf-8"))))
+    if final.exists():
+        for path in sorted(final.glob("*.json")):
+            reports.append((path.name, json.loads(path.read_text(encoding="utf-8"))))
     eval_text = (root / "docs" / "EVAL.md").read_text(encoding="utf-8") if (root / "docs" / "EVAL.md").exists() else "No generated evaluation report."
     design = (root / "docs" / "DESIGN.md").read_text(encoding="utf-8") if (root / "docs" / "DESIGN.md").exists() else ""
     ai_use = (root / "docs" / "AI_USE.md").read_text(encoding="utf-8") if (root / "docs" / "AI_USE.md").exists() else ""
     lines = [
-        "# Asterline Assistant — Take-home submission",
+        "# Asterline Assistant — Take-Home Assessment",
         "",
-        "Repository: https://github.com/satvik310706/asterline-assistant",
-        "LangSmith traces: [PASTE_SHARED_TRACE_LINKS_HERE]",
+        f"Name: {NAME}",
+        f"NIAT ID: {NIAT_ID}",
+        f"Repository: {GITHUB_URL}",
+        f"LangSmith traces: {LANGSMITH_URL}",
         "",
         "## Executive summary",
         "A research assistant that answers only from an immutable corpus, cites evidence,",
@@ -122,6 +174,16 @@ def build_submission(root: Path = Path(".")) -> tuple[Path, Path]:
     md_path = root / "SUBMISSION.md"
     pdf_path = root / "SUBMISSION.pdf"
     md_path.write_text(markdown, encoding="utf-8")
-    pdf_lines = [re.sub(r"[`*_]", "", line) for line in lines]
-    _write_simple_pdf(pdf_path, pdf_lines)
+
+    # In the actual repo root, generate rich publication-quality PDF via Chromium
+    is_real_repo = (root / "data" / "corpus.jsonl").exists()
+    generated = False
+    if is_real_repo:
+        generated = _generate_rich_pdf(pdf_path, root)
+
+    # In test tmp_path or if Playwright is unavailable, fall back to simple PDF
+    if not generated:
+        pdf_lines = [re.sub(r"[`*_]", "", line) for line in lines]
+        _write_simple_pdf(pdf_path, pdf_lines)
+
     return md_path, pdf_path

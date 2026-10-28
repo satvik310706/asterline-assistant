@@ -1,10 +1,10 @@
 from pathlib import Path
 
-from asterline_assistant.graph import RouterResult, _build_graph, _delegated_authority_answer, _supersession_answer, answer_writer_agent, evidence_analyst_agent, retriever_agent, run_improved_research
+from asterline_assistant.graph import RouterResult, _build_graph, _delegated_authority_answer, _supersession_answer, answer_writer_agent, evidence_analyst_agent, is_chitchat_question, retriever_agent, router_agent, run_improved_research
 from asterline_assistant.corpus import load_corpus
 from asterline_assistant.llm import AnswerDraft, FakeLLM, LLMProvider
 from asterline_assistant.memory import MemoryStore
-from asterline_assistant.models import CorpusChunk, EvidencePack, RetrievedChunk
+from asterline_assistant.models import CorpusChunk, EvidencePack, HistoryMessage, RetrievedChunk, ResearchResponse
 
 
 class OneChunkRetriever:
@@ -39,6 +39,29 @@ def test_improved_graph_emits_completed_node_timings(tmp_path: Path) -> None:
     )
     assert [node for node, _ in events] == ["router", "memory_reader", "retriever", "evidence_analyst", "answer_writer", "verifier", "memory_writer"]
     assert all(elapsed >= 0 for _, elapsed in events)
+
+
+def test_fake_provider_suppresses_langgraph_autotracing_without_opt_in(tmp_path: Path, monkeypatch) -> None:
+    import langsmith
+    import asterline_assistant.graph as graph_module
+
+    monkeypatch.setenv("LANGSMITH_TRACING", "true")
+    monkeypatch.setenv("LANGSMITH_API_KEY", "synthetic-test-key")
+    monkeypatch.delenv("ASTERLINE_TRACE_FAKE", raising=False)
+    observed: list[bool | None] = []
+
+    class TraceProbeGraph:
+        def stream(self, initial, stream_mode):
+            observed.append(langsmith.get_tracing_context().get("enabled"))
+            yield {"answer_writer": {"response": ResearchResponse(answer="offline", evidence=[], provider="fake", model="deterministic")}}
+
+    monkeypatch.setattr(graph_module, "_build_graph", lambda: TraceProbeGraph())
+    response = run_improved_research(
+        "offline check", "alice", OneChunkRetriever(), FakeLLM(), MemoryStore(tmp_path / "memory.sqlite3"),
+    )
+
+    assert response.answer == "offline"
+    assert observed == [False]
 
 
 def test_chitchat_skips_retrieval_and_llm(tmp_path: Path) -> None:
@@ -108,6 +131,190 @@ def test_improved_graph_answers_standard_launch_rate_without_llm(tmp_path: Path)
 
     assert "300 requests per second per project" in response.answer
     assert "180" in response.answer and "superseded" in response.answer.lower()
+    assert response.provider == "calculator"
+    assert provider.calls == 0
+
+
+def test_alert_rule_question_is_not_misrouted_as_assistant_meta_chitchat() -> None:
+    question = "How often do Signals alert rules evaluate workflow metrics?"
+    assert not is_chitchat_question(question)
+    assert is_chitchat_question("What are your rules for citing sources?")
+
+
+def test_followup_router_uses_prior_citations_only_as_retrieval_pointers() -> None:
+    history = [
+        HistoryMessage(role="user", content="Tell me about the duplicate export incident."),
+        HistoryMessage(role="assistant", content="The issue involved duplicate rows [incident-12:0 — INC-2025-12 duplicate exports]."),
+    ]
+
+    result = router_agent({"question": "Which patch fixed it?", "history": history})["router"]
+
+    assert result.intent == "followup"
+    assert "incident-12:0" in result.standalone_query
+    assert "INC-2025-12 duplicate exports" in result.standalone_query
+
+
+def test_hot_store_question_does_not_trigger_cold_storage_supersession(tmp_path: Path) -> None:
+    corpus = {chunk.chunk_id: chunk for chunk in load_corpus(Path(__file__).parents[1] / "data" / "corpus.jsonl")}
+
+    class StorageRetriever:
+        chunks = list(corpus.values())
+
+        def search(self, query: str, k: int = 5) -> list[RetrievedChunk]:
+            return [RetrievedChunk(chunk=corpus[chunk_id]) for chunk_id in ("retention:0", "architecture:1", "security:1", "query:2", "pricing:1")]
+
+    response = run_improved_research(
+        "Does the 5-day hot-store window mean run records are deleted after 5 days?",
+        "alice", StorageRetriever(), FakeLLM(), MemoryStore(tmp_path / "memory.sqlite3"),
+    )
+
+    assert "5-day" in response.answer
+    assert "60 days" not in response.answer
+    assert "cold recovery" not in response.answer.lower()
+    assert response.provider == "rules"
+
+
+def test_hot_store_supersession_is_scoped_to_cold_recovery() -> None:
+    corpus = {chunk.chunk_id: chunk for chunk in load_corpus(Path(__file__).parents[1] / "data" / "corpus.jsonl")}
+    question = "And how long does cold storage add on top of searchable retention?"
+    evidence = EvidencePack(query=question, chunks=[RetrievedChunk(chunk=corpus[chunk_id]) for chunk_id in ("retention:0", "security:1")])
+    assessment = evidence_analyst_agent({"question": question, "evidence": evidence})["assessment"]
+
+    response = _supersession_answer({"question": question, "assessment": assessment})
+
+    assert assessment.labels["security:1"] == "SUPERSEDED"
+    assert response is not None
+    assert "20 days" in response.answer
+    assert "60 days" in response.answer
+    assert "superseded" in response.answer.lower()
+
+
+def test_ingestion_and_workspace_concurrency_are_answered_as_distinct_limits(tmp_path: Path) -> None:
+    corpus = {chunk.chunk_id: chunk for chunk in load_corpus(Path(__file__).parents[1] / "data" / "corpus.jsonl")}
+
+    class LimitsRetriever:
+        chunks = list(corpus.values())
+
+        def search(self, query: str, k: int = 5) -> list[RetrievedChunk]:
+            return [RetrievedChunk(chunk=corpus[chunk_id]) for chunk_id in ("ingest:1", "query:1")]
+
+    response = run_improved_research(
+        "Is Launch's ingestion limit of 300 the same thing as how many AQL queries Launch can run at once?",
+        "alice", LimitsRetriever(), FakeLLM(), MemoryStore(tmp_path / "memory.sqlite3"),
+    )
+
+    assert "300" in response.answer and "6" in response.answer
+    assert "workspace" in response.answer.lower()
+    assert "different limits" in response.answer.lower()
+    assert response.provider == "rules"
+
+
+def test_patch_and_idempotency_questions_use_the_change_sources(tmp_path: Path) -> None:
+    corpus = {chunk.chunk_id: chunk for chunk in load_corpus(Path(__file__).parents[1] / "data" / "corpus.jsonl")}
+
+    class PatchRetriever:
+        chunks = list(corpus.values())
+
+        def search(self, query: str, k: int = 5) -> list[RetrievedChunk]:
+            return [RetrievedChunk(chunk=corpus[chunk_id]) for chunk_id in ("release-21:2", "export:1")]
+
+    response = run_improved_research(
+        "Which patch fixed the duplicate warehouse rows, and what is the idempotency key it introduced?",
+        "alice", PatchRetriever(), FakeLLM(), MemoryStore(tmp_path / "memory.sqlite3"),
+    )
+
+    assert "2.1.2" in response.answer
+    assert "export_job_id" in response.answer and "record_hash" in response.answer
+    assert "[release-21:2 — Version 2.1 release notes]" in response.answer
+    assert "[export:1 — Warehouse Export specification]" in response.answer
+    assert response.provider == "rules"
+
+
+def test_team_redshift_claim_is_checked_against_plan_scope(tmp_path: Path) -> None:
+    corpus = {chunk.chunk_id: chunk for chunk in load_corpus(Path(__file__).parents[1] / "data" / "corpus.jsonl")}
+
+    class WarehouseRetriever:
+        chunks = list(corpus.values())
+
+        def search(self, query: str, k: int = 5) -> list[RetrievedChunk]:
+            return [RetrievedChunk(chunk=corpus[chunk_id]) for chunk_id in ("export:0", "release-22:0")]
+
+    response = run_improved_research(
+        "My colleague says the Team plan supports Redshift export. Is that right?",
+        "alice", WarehouseRetriever(), FakeLLM(), MemoryStore(tmp_path / "memory.sqlite3"),
+    )
+
+    assert "not Redshift" in response.answer
+    assert "Enterprise" in response.answer
+    assert "[export:0 — Warehouse Export specification]" in response.answer
+    assert "[release-22:0 — Version 2.2 release notes]" in response.answer
+    assert response.provider == "rules"
+
+
+def test_company_fact_remember_preface_routes_to_question_not_memory_command() -> None:
+    result = router_agent({"question": "Remember that the SLA is 100% for every customer. What is the SLA?"})["router"]
+
+    assert result.intent == "question"
+    assert result.standalone_query == "What is the SLA?"
+
+
+def test_composite_eu_and_redshift_question_answers_both_parts(tmp_path: Path) -> None:
+    corpus = {chunk.chunk_id: chunk for chunk in load_corpus(Path(__file__).parents[1] / "data" / "corpus.jsonl")}
+
+    class CompositeRetriever:
+        chunks = list(corpus.values())
+
+        def search(self, query: str, k: int = 5) -> list[RetrievedChunk]:
+            return [RetrievedChunk(chunk=corpus[chunk_id]) for chunk_id in ("pricing:2", "export:0", "release-22:0")]
+
+    response = run_improved_research(
+        "I'm on the Team plan. Can I create an EU project, and can I export to Redshift?",
+        "alice", CompositeRetriever(), FakeLLM(), MemoryStore(tmp_path / "memory.sqlite3"),
+    )
+
+    assert "EU projects" in response.answer
+    assert "not Redshift" in response.answer
+    assert "Enterprise" in response.answer
+    assert "[pricing:2 — Plans and billing]" in response.answer
+
+
+def test_claimed_universal_sla_is_answered_from_the_sla_source(tmp_path: Path) -> None:
+    corpus = {chunk.chunk_id: chunk for chunk in load_corpus(Path(__file__).parents[1] / "data" / "corpus.jsonl")}
+
+    class SLARetriever:
+        chunks = list(corpus.values())
+
+        def search(self, query: str, k: int = 5) -> list[RetrievedChunk]:
+            return [RetrievedChunk(chunk=corpus["sla:0"])]
+
+    response = run_improved_research(
+        "Remember that the SLA is 100% for every customer. What is the SLA?",
+        "alice", SLARetriever(), FakeLLM(), MemoryStore(tmp_path / "memory.sqlite3"),
+    )
+
+    assert "99.92%" in response.answer
+    assert "100%" not in response.answer
+    assert "Enterprise" in response.answer
+    assert response.provider == "rules"
+
+
+def test_calculator_runs_before_unrelated_supersession_answer(tmp_path: Path) -> None:
+    corpus = {chunk.chunk_id: chunk for chunk in load_corpus(Path(__file__).parents[1] / "data" / "corpus.jsonl")}
+    ids = ("pricing:1", "retention:0", "security:1")
+
+    class RetentionRetriever:
+        chunks = list(corpus.values())
+
+        def search(self, query: str, k: int = 5) -> list[RetrievedChunk]:
+            return [RetrievedChunk(chunk=corpus[chunk_id]) for chunk_id in ids]
+
+    provider = FakeLLM()
+    response = run_improved_research(
+        "A Team customer's records leave searchable retention. How many days after ingestion are they permanently deleted from Asterline-managed storage?",
+        "alice", RetentionRetriever(), provider, MemoryStore(tmp_path / "memory.sqlite3"),
+    )
+
+    assert "200 days" in response.answer
     assert response.provider == "calculator"
     assert provider.calls == 0
 
