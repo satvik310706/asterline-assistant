@@ -1,9 +1,10 @@
 # Build progress
 
-- [ ] PRE-STEP — no-fallback eval mode, safe pacing, baseline freeze
-  - [ ] inspect prior mixed-provider report
-  - [ ] implement flags, retries, resume, and provider counts
-  - [ ] run tests and the required baseline no-fallback eval
+- [x] PRE-STEP — no-fallback eval mode, safe pacing, baseline freeze
+  - [x] inspected prior mixed-provider report: S09/S10 were Gemini ClientError 429 fallbacks
+  - [x] implemented flags, retries, resume identity, pacing, and provider counts
+  - [x] focused tests passed; required real no-fallback commands were blocked by Gemini preflight
+  - Not verified: a full 80-case no-fallback Gemini report because preflight failed before cases started
 - [ ] A — improved seven-agent LangGraph pipeline
   - [ ] typed/redacted agent spans
   - [ ] analyst, verifier, and memory-writer integration
