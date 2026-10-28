@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import os
 import json
+import hashlib
 from functools import wraps
 from collections.abc import Callable
 from typing import Any, TypeVar
 
 from langsmith import traceable
+
+from .memory import redact_sensitive
 
 F = TypeVar("F", bound=Callable[..., Any])
 _trace_context: dict[str, str | int | bool | None] = {}
@@ -47,7 +50,7 @@ def traced(name: str) -> Callable[[F], F]:
                 return function(*args, **kwargs)
             safe_input = {"agent": name, "eval_run_id": None, "case_id": None, "category": None, "config": None, "provider": None, "model": None, "attempts": 0, "degraded": False, **_trace_context}
             if args and isinstance(args[0], str):
-                safe_input["text"] = args[0][:2000]
+                safe_input["text"] = redact_sensitive(args[0])[:2000]
             traced_call = traceable(name=name, run_type="chain", process_outputs=_trace_output)(lambda _: function(*args, **kwargs))
             return traced_call(json.dumps(safe_input, sort_keys=True))
 

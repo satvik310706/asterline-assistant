@@ -12,6 +12,7 @@ from .memory_eval import run_memory_eval
 from .llm import make_provider
 from .memory import MemoryStore
 from .research import run_research
+from .graph import run_improved_research
 from .retrieval import HybridRetriever
 
 
@@ -58,7 +59,8 @@ def main() -> None:
         validate_corpus_integrity(settings.corpus_path)
         provider = make_provider(args.provider or settings.llm_provider, settings.gemini_model, settings.ollama_model)
         retriever = HybridRetriever(load_corpus(settings.corpus_path), settings.chroma_path, settings.fastembed_cache_path)
-        response = run_research(args.question, args.user, retriever, provider, MemoryStore(settings.sqlite_path))
+        research_fn = run_improved_research if settings.config == "improved" else run_research
+        response = research_fn(args.question, args.user, retriever, provider, MemoryStore(settings.sqlite_path))
         print(response.answer)
         print(f"provider/model: {response.provider}/{response.model}")
         print(f"degraded: {response.degraded}")

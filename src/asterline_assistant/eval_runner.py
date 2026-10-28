@@ -19,6 +19,7 @@ from .llm import ProviderFailure, ResilientLLM, make_provider
 from .memory import MemoryStore
 from .models import AnswerDraft, EvidencePack, HistoryMessage, ResearchResponse
 from .research import build_evidence, retrieve, route, run_research
+from .graph import run_improved_research
 from .retrieval import HybridRetriever
 from .tracing import clear_trace_context, set_trace_context
 
@@ -207,7 +208,10 @@ def run(dataset: Path, settings: Settings, limit: int | None = None, skip_prefli
                 else:
                     if settings.eval_min_interval_seconds > 0 and case_results and provider.name != "fake":
                         time.sleep(settings.eval_min_interval_seconds)
-                    response = run_research(row["question"], "eval", retriever, provider, memory, history=history, prepared_query=query, prepared_evidence=evidence)
+                    if settings.config == "improved":
+                        response = run_improved_research(row["question"], "eval", retriever, provider, memory, history=history)
+                    else:
+                        response = run_research(row["question"], "eval", retriever, provider, memory, history=history, prepared_query=query, prepared_evidence=evidence)
                 if response.provider_error:
                     status = "provider_error"
             except ProviderFailure as error:

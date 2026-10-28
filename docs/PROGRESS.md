@@ -5,10 +5,11 @@
   - [x] implemented flags, retries, resume identity, pacing, and provider counts
   - [x] focused tests passed; required real no-fallback commands were blocked by Gemini preflight
   - Not verified: a full 80-case no-fallback Gemini report because preflight failed before cases started
-- [ ] A — improved seven-agent LangGraph pipeline
-  - [ ] typed/redacted agent spans
-  - [ ] analyst, verifier, and memory-writer integration
-  - [ ] tests and commit
+- [x] A — improved seven-agent LangGraph pipeline
+  - [x] typed/redacted agent spans
+  - [x] analyst, verifier, and memory-writer integration
+  - [x] graph tests and improved FakeLLM smoke run passed
+  - Not verified: live LangSmith rendering; credentials were not inspected or required
 - [ ] B — failure-driven improvement and comparative evaluations
   - [ ] cluster baseline failures and write failure log
   - [ ] run improved and memory evaluations
