@@ -15,11 +15,12 @@ from .memory import MemoryStore
 from .research import run_research
 from .graph import run_improved_research
 from .retrieval import HybridRetriever
+from .observability import export_representative_traces, maybe_upload
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["run", "ingest", "test", "eval", "eval-memory", "ask"])
+    parser.add_argument("command", choices=["run", "ingest", "test", "eval", "eval-memory", "ask", "export-traces"])
     parser.add_argument("question", nargs="?")
     parser.add_argument("--provider", choices=["gemini", "ollama", "fake"])
     parser.add_argument("--config", choices=["baseline", "improved"])
@@ -34,6 +35,9 @@ def main() -> None:
     if args.command == "ingest":
         validate_corpus_integrity(settings.corpus_path)
         print(f"Loaded {len(load_corpus(settings.corpus_path))} corpus chunks.")
+    elif args.command == "export-traces":
+        print(export_representative_traces(Path("docs/trace_exports")))
+        print(maybe_upload(Path("eval/datasets/research.jsonl")))
     elif args.command == "eval":
         dataset = Path("eval/datasets/research.jsonl")
         if not dataset.exists():

@@ -1,0 +1,9 @@
+{
+  "name": "conflict-answer",
+  "user_id_hash": "synthetic-redacted",
+  "config": "improved",
+  "provider": "fake",
+  "degraded": false,
+  "outcome": "Current evidence stated; superseded value flagged.",
+  "agent_tree": "router \u2192 memory_reader \u2192 retriever \u2192 evidence_analyst \u2192 answer_writer \u2192 verifier \u2192 memory_writer"
+}

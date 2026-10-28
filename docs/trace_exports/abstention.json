@@ -1,0 +1,9 @@
+{
+  "name": "abstention",
+  "user_id_hash": "synthetic-redacted",
+  "config": "improved",
+  "provider": "fake",
+  "degraded": false,
+  "outcome": "Information not published in the corpus.",
+  "agent_tree": "router \u2192 retriever \u2192 evidence_analyst \u2192 answer_writer \u2192 verifier"
+}

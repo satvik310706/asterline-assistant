@@ -20,10 +20,11 @@
   - [x] AppTest startup, memory actions, FakeLLM remember, and user isolation passed
   - [x] UI test suite passed: 3 passed
   - Not verified: live `uv run asterline run` health endpoint; the shell could not start the long-running process in this environment
-- [ ] D — observability and trace exports
-  - [ ] redaction test, optional uploads, representative exports
-  - [ ] docs/TRACES.md
-  - [ ] tests and commit
+- [x] D — observability and trace exports
+  - [x] redaction regression test, optional non-fatal upload hook, representative exports
+  - [x] docs/TRACES.md
+  - [x] tests passed: tracing redaction 1 passed
+  - Not verified: shared LangSmith links or successful dataset upload; the installed client lacked the attempted upload API
 - [ ] E — generated documentation and demo
   - [ ] generated EVAL.md, DESIGN.md, README updates, AI_USE.md
   - [ ] DEMO.md and headless demo sequence
