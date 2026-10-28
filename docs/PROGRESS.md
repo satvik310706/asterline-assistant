@@ -43,7 +43,7 @@ Status is updated after each deliverable with what works, verification commands,
 ## Phase 5 handoff progress
 
 - [x] 5.1 dataset byte preservation: `.gitattributes` added; active workspace raw hashes and line counts match the assignment.
-- [x] 5.2 provider diagnostics: status, quota class, Retry-After, model, and sanitized primary/fallback errors are carried through CLI/eval/trace metadata.
+- [x] 5.2 provider diagnostics: status, quota class, Retry-After, model, and sanitized primary/fallback errors are carried through CLI/eval/trace metadata; Google retry-delay text is decoded without exposing secrets.
 - [ ] 5.3 real Gemini baseline/improved/memory runs and one measured improvement.
 - [ ] 5.4 real LangSmith uploads and trace exports.
 - [ ] 5.5 live Streamlit health check.

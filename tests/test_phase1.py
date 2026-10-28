@@ -273,6 +273,16 @@ def test_preflight_always_429_exhausts_once_without_fallback_retry_loop() -> Non
     assert len(sleeps) == 0
 
 
+def test_provider_diagnostics_parse_quota_and_retry_delay_from_genai_text() -> None:
+    error = classify_failure(Exception("429 RESOURCE_EXHAUSTED: day limit exceeded; retryDelay: 1108s"))
+    assert error.status_code == 429
+    assert error.quota_type == "per-day"
+    assert error.retry_after == 1108
+    rendered = format_failure("gemini", "gemini-test", error, "primary")
+    assert "quota=per-day" in rendered
+    assert "retry_after=1108s" in rendered
+
+
 def test_abstention_without_citations_is_valid() -> None:
     chunk = load_corpus(ROOT / "data/corpus.jsonl")[0]
     provider = GeminiLLM("test", max_attempts=1)

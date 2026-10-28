@@ -87,6 +87,11 @@ def _retry_after(error: Exception) -> float | None:
             return max(0.0, float(raw)) if raw is not None else None
         except (TypeError, ValueError):
             return None
+    # google-genai may expose RetryInfo only in the rendered exception text.
+    # Preserve that server hint without depending on a private SDK response type.
+    match = re.search(r"(?:retry[- ]after|retrydelay|retry delay)[^0-9]*(\d+(?:\.\d+)?)\s*s?", str(error), re.IGNORECASE)
+    if match:
+        return max(0.0, float(match.group(1)))
     return None
 
 
@@ -96,7 +101,7 @@ def classify_failure(error: Exception, attempts: int = 0) -> ProviderFailure:
     config_error = code in CONFIG_CODES or any(marker in detail.lower() for marker in CONFIG_MARKERS)
     transient = not config_error and (code in TRANSIENT_CODES or isinstance(error, TimeoutError) or "timeout" in error.__class__.__name__.lower())
     message = "Gemini rejected the model/key: check GEMINI_MODEL and your key." if config_error else "provider request failed"
-    quota_type = "per-day" if re.search(r"per[- ]day|daily quota|daily limit", detail, re.IGNORECASE) else ("per-minute" if re.search(r"per[- ]minute|per minute|minute quota|rpm", detail, re.IGNORECASE) else None)
+    quota_type = "per-day" if re.search(r"per[- ]day|daily quota|daily limit|day limit", detail, re.IGNORECASE) else ("per-minute" if re.search(r"per[- ]minute|per minute|minute quota|rpm", detail, re.IGNORECASE) else None)
     return ProviderFailure(message, error_class=error.__class__.__name__, transient=transient, status_code=code, retry_after=_retry_after(error), quota_type=quota_type, attempts=attempts, detail=detail)
 
 

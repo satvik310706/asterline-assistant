@@ -188,7 +188,7 @@ def run(dataset: Path, settings: Settings, limit: int | None = None, skip_prefli
                     else:
                         provider.answer("Reply with one word: ready", first_evidence)
                 except ProviderFailure as error:
-                    print(str(error))
+                    print(format_failure(provider.name, provider.model, error, "primary"))
                     print("Eval preflight failed; no cases were started.")
                     return output_path
         for row in rows:
