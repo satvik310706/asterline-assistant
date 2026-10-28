@@ -13,11 +13,7 @@ EXPECTED_CORPUS_LINES = 75
 
 
 def corpus_sha256(path: Path) -> str:
-    # Git may materialize LF on Windows even when the supplied checksum was
-    # recorded from CRLF bytes. Canonicalize line endings for integrity only;
-    # the corpus file itself is never rewritten.
-    raw = path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n").replace(b"\n", b"\r\n")
-    return hashlib.sha256(raw).hexdigest()
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def load_corpus(path: Path) -> list[CorpusChunk]:

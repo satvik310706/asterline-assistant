@@ -26,8 +26,7 @@ def main() -> None:
         subprocess.run(["uv", "run", "pytest", "-q"], cwd=clone, check=True)
         subprocess.run(["uv", "run", "asterline", "ask", "What is the Team plan price?", "--provider", "fake"], cwd=clone, check=True)
         for name, expected in EXPECTED.items():
-            raw = (clone / name).read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n").replace(b"\n", b"\r\n")
-            actual = hashlib.sha256(raw).hexdigest()
+            actual = hashlib.sha256((clone / name).read_bytes()).hexdigest()
             assert actual == expected, name
         secret_pattern = re.compile(r"sk-[A-Za-z0-9_-]{8,}|AIza[0-9A-Za-z_-]{20,}|Bearer\s+[A-Za-z0-9._~+/=-]+", re.I)
         tracked = subprocess.check_output(["git", "ls-files"], cwd=clone, text=True).splitlines()
