@@ -55,6 +55,10 @@ class MemoryStore:
         rows = self.connection.execute("SELECT * FROM memories WHERE user_id = ? AND status = 'active' ORDER BY id", (user_id,)).fetchall()
         return [MemoryRecord.model_validate(dict(row) | {"is_authoritative": bool(row["is_authoritative"])}) for row in rows]
 
+    def list_sessions(self, user_id: str) -> list[str]:
+        rows = self.connection.execute("SELECT session_id FROM sessions WHERE user_id = ? ORDER BY rowid DESC", (user_id,)).fetchall()
+        return [str(row["session_id"]) for row in rows]
+
     def write_explicit(self, user_id: str, content: str, session: str = "", turn: str = "") -> MemoryRecord | None:
         if not content.strip() or SECRET_RE.search(content) or SENSITIVE_RE.search(content):
             return None
@@ -89,6 +93,19 @@ class MemoryStore:
             return False
         self.connection.execute("DELETE FROM memory_vectors WHERE user_id = ? AND memory_id = ?", (user_id, memory_id))
         self.connection.execute("DELETE FROM memories WHERE user_id = ? AND id = ?", (user_id, memory_id))
+        self.connection.commit()
+        return True
+
+    def edit_memory(self, user_id: str, memory_id: int, content: str) -> bool:
+        """Edit only safe user context; keep the original record identity."""
+        if not content.strip() or SECRET_RE.search(content) or SENSITIVE_RE.search(content):
+            return False
+        row = self.connection.execute("SELECT id FROM memories WHERE user_id = ? AND id = ? AND status = 'active'", (user_id, memory_id)).fetchone()
+        if row is None:
+            return False
+        now = self.clock.now().isoformat()
+        self.connection.execute("UPDATE memories SET content = ?, updated_at = ?, last_confirmed_at = ? WHERE user_id = ? AND id = ?", (redact_sensitive(content.strip()), now, now, user_id, memory_id))
+        self.connection.execute("UPDATE memory_vectors SET content = ? WHERE user_id = ? AND memory_id = ?", (redact_sensitive(content.strip()), user_id, memory_id))
         self.connection.commit()
         return True
 
